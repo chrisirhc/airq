@@ -247,6 +247,7 @@ function render(): void {
       <footer class="site-footer">
         <p>Data from the National Environment Agency via data.gov.sg.</p>
         <p>For immediate activity decisions, refer to the 1-hour PM2.5 reading and official guidance.</p>
+        <p><a href="https://github.com/chrisirhc/airq" target="_blank" rel="noreferrer">Source code on GitHub</a></p>
       </footer>
     </div>
   `;

@@ -8,7 +8,12 @@ import {
   decideBadge,
   type RegionalSnapshot,
 } from "./badge-domain";
-import { enrollmentReceiptSchema, pushConfigSchema } from "./push-protocol";
+import {
+  enrollmentReceiptSchema,
+  pushConfigSchema,
+  testStatusMessage,
+  testStatusSchema,
+} from "./push-protocol";
 
 const credentialSchema = z.object({ id: z.string(), token: z.string() });
 const responseSchema = z.object({ state: badgeStateSchema });
@@ -19,6 +24,10 @@ export function createBackgroundBadge(onChange: () => void) {
   let state: BadgeState = { mode: "disabled" };
   let busy = false;
   let message = "";
+  let testMessage = "";
+  let statusTimer: ReturnType<typeof setTimeout> | undefined;
+  let checkingStatus = false;
+  let statusGeneration = 0;
   let configured = false;
   let publicKey = "";
   let current: BadgeInput | null = null;
@@ -70,6 +79,7 @@ export function createBackgroundBadge(onChange: () => void) {
       message = "Background tests are unavailable here. Foreground badges may still work.";
     }
     onChange();
+    void refreshTestStatus();
   }
 
   function credential() {
@@ -77,19 +87,55 @@ export function createBackgroundBadge(onChange: () => void) {
     return value ? credentialSchema.parse(JSON.parse(value)) : null;
   }
 
-  async function api(path: string, method: string): Promise<void> {
+  async function api(path: string, method: string): Promise<Response> {
     const saved = credential();
     if (!saved) throw new Error("Push enrollment is missing. Disable and enable again.");
     const response = await fetch(`/api/badge/subscriptions/${saved.id}${path}`, {
       method,
+      signal: AbortSignal.timeout(8_000),
       headers: { Authorization: `Bearer ${saved.token}` },
     });
     if (!response.ok) {
-      if (method === "DELETE" && (response.status === 401 || response.status === 410)) return;
+      if (method === "DELETE" && (response.status === 401 || response.status === 410))
+        return response;
+      if (response.status === 401 || response.status === 410)
+        throw new Error(
+          "Push enrollment is missing or expired. Disable and enable background testing again.",
+        );
       const error = z.object({ error: z.string() }).safeParse(await response.json());
       throw new Error(error.success ? error.data.error : "Push request failed");
     }
+    return response;
   }
+
+  async function refreshTestStatus(): Promise<void> {
+    if (checkingStatus || busy || state.mode !== "background" || document.hidden) return;
+    clearTimeout(statusTimer);
+    checkingStatus = true;
+    const generation = statusGeneration;
+    try {
+      const result = testStatusSchema.parse(await (await api("/test", "GET")).json());
+      if (state.mode !== "background" || generation !== statusGeneration) return;
+      testMessage = testStatusMessage(result);
+      if (result.status === "pending")
+        statusTimer = setTimeout(() => void refreshTestStatus(), 2_500);
+    } catch (error: unknown) {
+      if (generation !== statusGeneration || state.mode !== "background") return;
+      testMessage =
+        error instanceof Error
+          ? error.message
+          : "Cannot check test delivery. Reopen AirQ to retry.";
+    } finally {
+      checkingStatus = false;
+      if (generation !== statusGeneration && state.mode === "background")
+        statusTimer = setTimeout(() => void refreshTestStatus(), 0);
+      onChange();
+    }
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) void refreshTestStatus();
+  });
+  window.addEventListener("focus", () => void refreshTestStatus());
 
   async function stopPush(): Promise<void> {
     const subscription = await registration?.pushManager?.getSubscription();
@@ -98,6 +144,9 @@ export function createBackgroundBadge(onChange: () => void) {
     if (subscription && !(await subscription.unsubscribe()))
       throw new Error("Could not unsubscribe. Try disabling again.");
     localStorage.removeItem(CREDENTIAL_KEY);
+    statusGeneration++;
+    clearTimeout(statusTimer);
+    testMessage = "";
   }
 
   async function enroll(): Promise<void> {
@@ -155,6 +204,7 @@ export function createBackgroundBadge(onChange: () => void) {
         targetChangedWhileBusy = false;
         sync(current, replaceTarget);
         onChange();
+        void refreshTestStatus();
       });
   }
 
@@ -243,6 +293,7 @@ export function createBackgroundBadge(onChange: () => void) {
         ${state.mode === "background" ? `<button id="badge-test" type="button" ${busy ? "disabled" : ""}>Send test notification</button>` : ""}
       </div>
       <p role="status" id="badge-status">${busy ? "Updating badge settings…" : escapeText(detail)} ${escapeText(message)}</p>${expiry}
+      ${state.mode === "background" ? `<p role="status" id="badge-test-status">${escapeText(testMessage)}</p>` : ""}
       ${!supported ? "<p>This browser does not expose app badges. Install the app on a supported device to use them.</p>" : ""}
       ${supported && !configured ? "<p>Background test delivery is not configured on this host.</p>" : ""}
     </section>`;
@@ -260,9 +311,11 @@ export function createBackgroundBadge(onChange: () => void) {
     );
     document.querySelector("#badge-test")?.addEventListener("click", () =>
       run(async () => {
+        statusGeneration++;
+        clearTimeout(statusTimer);
         await api("/test", "POST");
-        message =
-          "Test requested. Close AirQ now; delivery starts in 10 seconds. If nothing arrives, reopen and try again after a minute.";
+        testMessage = testStatusMessage({ status: "pending" });
+        await refreshTestStatus();
       }),
     );
   }

@@ -6,6 +6,13 @@ const server = createTestHarness({
   workers: [
     {
       config: {
+        name: "push-runtime-check",
+        main: "scripts/fixtures/push-worker.mjs",
+        compatibility_date: "2026-10-05",
+      },
+    },
+    {
+      config: {
         name: "airq-badge-test",
         main: "worker/index.ts",
         compatibility_date: "2026-10-05",
@@ -29,9 +36,24 @@ const server = createTestHarness({
 
 try {
   await server.listen();
-  const worker = server.getWorker();
+  assert.deepEqual(
+    await (await server.getWorker("push-runtime-check").fetch("https://test.local/")).json(),
+    {
+      result: {
+        status: "failed",
+        error: "push-rejected",
+        errorName: null,
+        httpStatus: 403,
+        providerReason: null,
+      },
+      bytes: 4096,
+    },
+  );
+  const worker = server.getWorker("airq-badge-test");
   const { BADGE_DB: db } = await worker.getEnv();
-  const sql = await readFile("migrations/0001_badge_gate.sql", "utf8");
+  const sql =
+    (await readFile("migrations/0001_badge_gate.sql", "utf8")) +
+    (await readFile("migrations/0002_test_diagnostics.sql", "utf8"));
   await db.batch(
     sql
       .split(";")
@@ -76,6 +98,23 @@ try {
   const headers = { Origin: origin, Authorization: `Bearer ${token}` };
   assert.deepEqual(await (await worker.fetch(`${url}/test`, { headers })).json(), {
     status: "none",
+    error: null,
+    errorName: null,
+    httpStatus: null,
+    providerReason: null,
+  });
+  await db
+    .prepare(
+      "UPDATE subscriptions SET test_status = 'failed', test_error = 'push-rejected', test_http_status = 403 WHERE id = ?",
+    )
+    .bind(id)
+    .run();
+  assert.deepEqual(await (await worker.fetch(`${url}/test`, { headers })).json(), {
+    status: "failed",
+    error: "push-rejected",
+    errorName: null,
+    httpStatus: 403,
+    providerReason: null,
   });
   const row = await db
     .prepare("SELECT token_hash, subscription FROM subscriptions WHERE id = ?")

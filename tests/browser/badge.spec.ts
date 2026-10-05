@@ -1,6 +1,96 @@
 import { expect, test } from "@playwright/test";
 import { pm25Response, psiResponse } from "./fixtures";
 
+test("reports rejected test delivery instead of leaving it requested", async ({
+  page,
+  context,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "Requires module service-worker persistence");
+  await page.addInitScript(
+    ({ pm25Response, psiResponse }) => {
+      const nativeFetch = window.fetch.bind(window);
+      let requested = sessionStorage.getItem("mock-test-requested") === "true";
+      window.fetch = (input, init) => {
+        const url = input instanceof Request ? input.url : String(input);
+        if (url.endsWith("/api/pm25")) return Promise.resolve(Response.json(pm25Response));
+        if (url.endsWith("/api/psi")) return Promise.resolve(Response.json(psiResponse));
+        if (url === "/api/badge/config")
+          return Promise.resolve(
+            Response.json({ enabled: true, publicKey: "test", testOnly: true }),
+          );
+        if (url.endsWith("/test")) {
+          if (init?.method === "POST") {
+            requested = true;
+            sessionStorage.setItem("mock-test-requested", "true");
+            return Promise.resolve(
+              Response.json({ status: "pending", delaySeconds: 10 }, { status: 202 }),
+            );
+          }
+          return Promise.resolve(
+            Response.json(
+              requested
+                ? { status: "failed", error: "push-rejected", httpStatus: 403 }
+                : { status: "none" },
+            ),
+          );
+        }
+        return nativeFetch(input, init);
+      };
+    },
+    { pm25Response, psiResponse },
+  );
+  await page.goto("/");
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+  const worker = context.serviceWorkers()[0];
+  if (!worker) throw new Error("Missing badge worker");
+  await worker.evaluate(
+    "Object.defineProperty(self.navigator, 'setAppBadge', { value: async () => {} });",
+  );
+  await page.evaluate(async () => {
+    const registration = await navigator.serviceWorker.ready;
+    const now = Date.now();
+    const channel = new MessageChannel();
+    await new Promise((resolve) => {
+      channel.port1.onmessage = resolve;
+      registration.active?.postMessage(
+        {
+          kind: "target",
+          target: { kind: "region", region: "east" },
+          snapshot: {
+            revision: 1,
+            readingAt: now,
+            updatedAt: now,
+            validUntil: now + 60_000,
+            referenceFingerprint: "test",
+            estimatorVersion: 1,
+            values: { north: 10, south: 20, east: 30, west: 40, central: 50 },
+          },
+        },
+        [channel.port2],
+      );
+    });
+    localStorage.setItem(
+      "airq:push-enrollment:v1",
+      JSON.stringify({ id: "a".repeat(64), token: "A".repeat(43) }),
+    );
+  });
+  await page.reload();
+  await page.getByRole("button", { name: "Send test notification" }).click();
+  await expect(page.locator("#badge-test-status")).toContainText(
+    "Push service rejected the test (HTTP 403)",
+  );
+  await page.reload();
+  await expect(page.locator("#badge-test-status")).toContainText(
+    "Push service rejected the test (HTTP 403)",
+  );
+  await expect(page.getByRole("link", { name: "Source code on GitHub" })).toHaveAttribute(
+    "href",
+    "https://github.com/chrisirhc/airq",
+  );
+});
+
 test("foreground-only opt-in updates the rounded badge and removes it on disable", async ({
   context,
   page,

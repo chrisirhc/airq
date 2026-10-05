@@ -1,4 +1,3 @@
-import { buildPushPayload } from "@block65/webcrypto-web-push";
 import { z } from "zod";
 import {
   ESTIMATOR_VERSION,
@@ -7,7 +6,8 @@ import {
   regionalSnapshotSchema,
 } from "../src/badge-domain";
 import { parsePm25 } from "../src/public-readings";
-import { enrollmentSchema, pushSubscriptionSchema } from "../src/push-protocol";
+import { enrollmentSchema, pushSubscriptionSchema, testStatusSchema } from "../src/push-protocol";
+import { deliverPush } from "./push-delivery";
 
 interface Env {
   ASSETS: Fetcher;
@@ -21,6 +21,10 @@ const storedEnrollmentSchema = z.object({
   token_hash: z.string(),
   expires_at: z.number(),
   test_status: z.string(),
+  test_error: z.string().nullable(),
+  test_error_name: z.string().nullable(),
+  test_http_status: z.number().nullable(),
+  test_provider_reason: z.string().nullable(),
 });
 const storedSnapshotSchema = z.object({ revision: z.number().int(), payload: z.string() });
 const json = (data: unknown, status = 200) =>
@@ -142,21 +146,32 @@ export default {
         await db.prepare("DELETE FROM subscriptions WHERE id = ?").bind(id).run();
         return json({ deleted: true });
       }
-      if (request.method === "GET" && match?.[2]) return json({ status: row.data.test_status });
+      if (request.method === "GET" && match?.[2])
+        return json(
+          testStatusSchema.parse({
+            status: row.data.test_status,
+            error: row.data.test_error,
+            errorName: row.data.test_error_name,
+            httpStatus: row.data.test_http_status,
+            providerReason: row.data.test_provider_reason,
+          }),
+        );
       if (request.method !== "POST" || !match?.[2])
         return json({ error: "Method not allowed" }, 405);
       if (row.data.expires_at <= Date.now())
         return json({ error: "Enrollment expired. Disable and enable again." }, 410);
       const reserved = await db
         .prepare(
-          "UPDATE subscriptions SET last_test_at = ?, test_status = 'pending' WHERE id = ? AND last_test_at < ?",
+          "UPDATE subscriptions SET last_test_at = ?, test_status = 'pending', test_error = NULL, test_error_name = NULL, test_http_status = NULL, test_provider_reason = NULL WHERE id = ? AND last_test_at < ?",
         )
         .bind(Date.now(), id, Date.now() - 60_000)
         .run();
       if (reserved.meta.changes === 0) return json({ error: "Wait one minute between tests" }, 429);
       const snapshot = await collectSnapshot(db).catch(async (error: unknown) => {
         await db
-          .prepare("UPDATE subscriptions SET test_status = 'failed' WHERE id = ?")
+          .prepare(
+            "UPDATE subscriptions SET test_status = 'failed', test_error = 'reading-unavailable' WHERE id = ?",
+          )
           .bind(id)
           .run();
         throw error;
@@ -171,22 +186,26 @@ export default {
               .bind(id, Date.now())
               .first();
             if (!active) return;
-            const payload = await buildPushPayload(
-              { data: JSON.stringify(snapshot), options: { ttl: 60, topic: "airq-reading" } },
+            const result = await deliverPush(
               subscription,
               { publicKey, privateKey, subject },
+              JSON.stringify(snapshot),
             );
-            const result = await fetch(subscription.endpoint, {
-              ...payload,
-              redirect: "error",
-              signal: AbortSignal.timeout(6_000),
-            });
-            if (result.status === 404 || result.status === 410)
+            if (result.status === "expired")
               await db.prepare("DELETE FROM subscriptions WHERE id = ?").bind(id).run();
             else
               await db
-                .prepare("UPDATE subscriptions SET test_status = ? WHERE id = ?")
-                .bind(result.ok ? "accepted" : "failed", id)
+                .prepare(
+                  "UPDATE subscriptions SET test_status = ?, test_error = ?, test_error_name = ?, test_http_status = ?, test_provider_reason = ? WHERE id = ?",
+                )
+                .bind(
+                  result.status,
+                  result.error,
+                  result.errorName,
+                  result.httpStatus,
+                  result.status === "failed" ? (result.providerReason ?? null) : null,
+                  id,
+                )
                 .run();
           } catch {
             await db
