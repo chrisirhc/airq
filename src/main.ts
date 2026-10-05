@@ -50,7 +50,7 @@ function render(): void {
   root.innerHTML = `
     <div class="page-shell">
       <header class="masthead">
-        <a class="brand" href="/" aria-label="Air around you home">
+        <a class="brand" href="./" aria-label="Air around you home">
           <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
           <span>Air around you</span>
         </a>
