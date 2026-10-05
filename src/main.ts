@@ -1,5 +1,13 @@
 import "./styles.css";
 import { loadAirQuality } from "./air-quality-client";
+import { createBackgroundBadge } from "./background-badge";
+import {
+  badgeTargetSchema,
+  ESTIMATOR_VERSION,
+  READING_LIFETIME_MS,
+  referenceFingerprint,
+  TARGET_LIFETIME_MS,
+} from "./badge-domain";
 import { classifyPm25, classifyPsi, statusTone } from "./classifiers";
 import {
   type AirQualitySnapshot,
@@ -16,7 +24,12 @@ const LOCATION_PREFERENCE_KEY = "airq:location-mode";
 
 type DisplayMode =
   | { readonly kind: "manual"; readonly region: Region }
-  | { readonly kind: "estimated"; readonly estimate: Pm25Estimate };
+  | {
+      readonly kind: "estimated";
+      readonly estimate: Pm25Estimate;
+      readonly referenceFingerprint: string;
+      readonly capturedAt: number;
+    };
 
 type DataState =
   | { readonly kind: "loading" }
@@ -42,11 +55,19 @@ let state: AppState = {
 };
 
 let locationRequestId = 0;
+const badge = createBackgroundBadge(render);
 
 render();
 void initialize();
 
 async function initialize(): Promise<void> {
+  void badge.start().then(() => {
+    const savedRegion = badge.savedRegion();
+    if (savedRegion && locationRequestId === 0)
+      state = { ...state, display: { kind: "manual", region: savedRegion } };
+    syncBadge(state.display.kind === "estimated");
+    render();
+  });
   await load();
   if (
     locationRequestId !== 0 ||
@@ -93,8 +114,78 @@ function saveLocationPreference(preference: "enabled" | "disabled"): void {
 
 async function load(): Promise<void> {
   const snapshot = await loadAirQuality();
+  if (state.display.kind === "estimated" && snapshot.pm25.kind === "available") {
+    const display = state.display;
+    const reading = snapshot.pm25.reading;
+    if (display.referenceFingerprint === referenceFingerprint(reading.references)) {
+      const contributions = display.estimate.contributions.map((contribution) => ({
+        ...contribution,
+        value: reading.values[contribution.region],
+      }));
+      state = {
+        ...state,
+        display: {
+          ...display,
+          estimate: {
+            ...display.estimate,
+            contributions,
+            value: contributions.reduce(
+              (sum, contribution) => sum + contribution.weight * contribution.value,
+              0,
+            ),
+          },
+        },
+      };
+    } else {
+      state = {
+        ...state,
+        display: { kind: "manual", region: display.estimate.closestRegion },
+        location: {
+          kind: "error",
+          message:
+            "Regional reference points changed. Use your location again to rebuild the estimate.",
+        },
+      };
+    }
+  }
   state = { ...state, data: { kind: "loaded", snapshot } };
+  syncBadge(false);
   render();
+}
+
+function syncBadge(replaceTarget: boolean): void {
+  if (state.data.kind === "loading") return;
+  if (state.data.snapshot.pm25.kind !== "available") {
+    badge.sync(null, false);
+    return;
+  }
+  const reading = state.data.snapshot.pm25.reading;
+  const snapshot = {
+    revision: 0,
+    readingAt: reading.timestamp.getTime(),
+    updatedAt: reading.updatedAt.getTime(),
+    validUntil: reading.updatedAt.getTime() + READING_LIFETIME_MS,
+    referenceFingerprint: referenceFingerprint(reading.references),
+    estimatorVersion: ESTIMATOR_VERSION,
+    values: reading.values,
+  };
+  const weights = { north: 0, south: 0, east: 0, west: 0, central: 0 };
+  if (state.display.kind === "estimated")
+    for (const contribution of state.display.estimate.contributions)
+      weights[contribution.region] = contribution.weight;
+  const target = badgeTargetSchema.parse(
+    state.display.kind === "manual"
+      ? { kind: "region", region: state.display.region }
+      : {
+          kind: "estimate",
+          weights,
+          referenceFingerprint: state.display.referenceFingerprint,
+          estimatorVersion: ESTIMATOR_VERSION,
+          capturedAt: state.display.capturedAt,
+          expiresAt: state.display.capturedAt + TARGET_LIFETIME_MS,
+        },
+  );
+  badge.sync({ target, snapshot }, replaceTarget);
 }
 
 function render(): void {
@@ -140,6 +231,8 @@ function render(): void {
       <section class="readings" aria-live="polite" aria-busy="${state.data.kind === "loading"}">
         ${renderReadings()}
       </section>
+
+      ${badge.html()}
 
       <section class="method-note">
         <p class="eyebrow">What this means</p>
@@ -314,6 +407,7 @@ function manualRegion(): Region {
 }
 
 function bindInteractions(): void {
+  badge.bind();
   const locationButton = document.querySelector("#location-button");
   locationButton?.addEventListener("click", requestLocation);
 
@@ -326,6 +420,7 @@ function bindInteractions(): void {
     locationRequestId += 1;
     saveLocationPreference("disabled");
     state = { ...state, display: { kind: "manual", region }, location: { kind: "idle" } };
+    syncBadge(true);
     render();
   });
 
@@ -367,6 +462,7 @@ function requestLocation(): void {
             : state.display,
         location: { kind: "error", message: geolocationError(error) },
       };
+      if (error.code === error.PERMISSION_DENIED) syncBadge(true);
       render();
     },
     { enableHighAccuracy: false, timeout: 8_000, maximumAge: 5 * 60 * 1000 },
@@ -407,7 +503,12 @@ function applyPosition(latitude: number, longitude: number): void {
       saveLocationPreference("enabled");
       state = {
         ...state,
-        display: { kind: "estimated", estimate: result.estimate },
+        display: {
+          kind: "estimated",
+          estimate: result.estimate,
+          referenceFingerprint: referenceFingerprint(pm25.references),
+          capturedAt: Date.now(),
+        },
         location: { kind: "idle" },
       };
       break;
@@ -428,6 +529,7 @@ function applyPosition(latitude: number, longitude: number): void {
       throw new Error(`Unhandled estimate result: ${JSON.stringify(exhaustive)}`);
     }
   }
+  syncBadge(result.kind === "estimated");
   render();
 }
 

@@ -578,3 +578,38 @@ footer {
     transition: none;
   }
 }
+.badge-controls {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  border: 1px solid #d4ddd8;
+  border-radius: 1rem;
+  background: #fffdf7;
+}
+.badge-controls h2 {
+  font-size: 1.4rem;
+}
+.page-shell .badge-controls > p {
+  max-width: 75ch;
+  line-height: 1.6;
+}
+.badge-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.badge-actions button {
+  padding: 0.8rem 1rem;
+  border-radius: 0.6rem;
+  border: 1px solid #10293f;
+  background: #10293f;
+  color: white;
+  cursor: pointer;
+}
+.badge-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.badge-actions button:focus-visible {
+  outline: 3px solid #558a77;
+  outline-offset: 3px;
+}

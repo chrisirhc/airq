@@ -1,39 +1,9 @@
 import { expect, test } from "@playwright/test";
 
-const pm25Response = {
-  code: 0,
-  data: {
-    regionMetadata: [
-      { name: "north", labelLocation: { latitude: 1.41803, longitude: 103.82 } },
-      { name: "south", labelLocation: { latitude: 1.29587, longitude: 103.82 } },
-      { name: "east", labelLocation: { latitude: 1.35735, longitude: 103.94 } },
-      { name: "west", labelLocation: { latitude: 1.35735, longitude: 103.7 } },
-      { name: "central", labelLocation: { latitude: 1.35735, longitude: 103.82 } },
-    ],
-    items: [
-      {
-        timestamp: new Date().toISOString(),
-        updatedTimestamp: new Date().toISOString(),
-        readings: { pm25_one_hourly: { north: 10, south: 20, east: 30, west: 40, central: 50 } },
-      },
-    ],
-  },
-};
+import { pm25Response, psiResponse } from "./fixtures";
 
-const psiResponse = {
-  code: 0,
-  data: {
-    items: [
-      {
-        timestamp: new Date().toISOString(),
-        updatedTimestamp: new Date().toISOString(),
-        readings: {
-          psi_twenty_four_hourly: { north: 40, south: 50, east: 60, west: 70, central: 80 },
-        },
-      },
-    ],
-  },
-};
+// Playwright request interception cannot reliably route service-worker-controlled pages.
+test.use({ serviceWorkers: "block" });
 
 test.beforeEach(async ({ page }) => {
   await page.route("https://api-open.data.gov.sg/v2/real-time/api/pm25", (route) =>
@@ -100,6 +70,35 @@ test("shows exact regional readings and a location estimate", async ({
     "false",
   );
   await expect(page.getByText("Central region PM2.5")).toBeVisible();
+});
+
+test("refreshes an active estimate when regional values change", async ({ context, page }) => {
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({ latitude: 1.35735, longitude: 103.94 });
+  await page.route("https://api-open.data.gov.sg/v2/real-time/api/psi", (route) => route.abort());
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "Using your location" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Estimate calculation" })).toContainText(
+    "≈ 30.00 µg/m³",
+  );
+  await page.route("https://api-open.data.gov.sg/v2/real-time/api/pm25", (route) =>
+    route.fulfill({
+      json: {
+        ...pm25Response,
+        data: {
+          ...pm25Response.data,
+          items: pm25Response.data.items.map((item) => ({
+            ...item,
+            readings: { pm25_one_hourly: { ...item.readings.pm25_one_hourly, east: 35 } },
+          })),
+        },
+      },
+    }),
+  );
+  await page.getByRole("button", { name: "Try again" }).click();
+  await expect(page.getByRole("region", { name: "Estimate calculation" })).toContainText(
+    "≈ 35.00 µg/m³",
+  );
 });
 
 test("explains the weighted estimate using all five regional readings", async ({
@@ -279,7 +278,9 @@ test("shows location progress and respects a manual selection during lookup", as
   const button = page.getByRole("button", { name: "Finding your location…" });
   await expect(button).toBeDisabled();
   await expect(button).toHaveAttribute("aria-busy", "true");
-  await expect(page.getByRole("status")).toContainText("Finding your location");
+  await expect(
+    page.getByRole("region", { name: "Location and region controls" }).getByRole("status"),
+  ).toContainText("Finding your location");
   await page.getByRole("combobox").selectOption("west");
   await page.evaluate(() => window.dispatchEvent(new Event("test-location-ready")));
   await expect(page.getByText("West region PM2.5")).toBeVisible();

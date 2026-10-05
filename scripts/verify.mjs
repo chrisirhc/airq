@@ -5,6 +5,7 @@ const checks = [
   ["Types", "npm", ["run", "typecheck"]],
   ["Unit tests", "npm", ["test"]],
   ["Production build", "npm", ["run", "build"]],
+  ["Worker integration", "npm", ["run", "test:worker"]],
   ["Browser test", "npm", ["run", "test:browser"]],
 ];
 

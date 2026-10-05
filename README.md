@@ -1,6 +1,6 @@
 # Air around you
 
-A client-only Singapore air-quality site. It shows official regional 1-hour PM2.5 and 24-hour PSI readings from data.gov.sg. With permission, it uses the browser's coordinates to calculate a clearly labeled, distance-weighted PM2.5 estimate.
+A Singapore air-quality site. It shows official regional 1-hour PM2.5 and 24-hour PSI readings from data.gov.sg. With permission, it uses the browser's coordinates to calculate a clearly labeled, distance-weighted PM2.5 estimate. An optional installed-app badge displays the rounded PM2.5 reading.
 
 ## Run locally
 
@@ -16,6 +16,8 @@ Safari may show another permission prompt if its earlier approval has expired.
 Otherwise, select **Use my location** to request access.
 The button shows **Finding your location…** during lookup and **Using your location** with a green background when the estimate is active.
 Choosing an official region returns to manual readings and keeps location mode off after a refresh.
+
+To install AirQ and configure its optional badge-test backend, see [the badge setup guide](BADGE_SETUP.md).
 
 ## Deploy to Cloudflare
 
@@ -93,7 +95,7 @@ The HTTP check proves that the site is reachable. The browser checks also verify
 `wrangler.jsonc` configures the `airq` Worker to serve `dist/` at `https://airq.b65.dev/`.
 The `workers.dev` hostname is disabled.
 Cloudflare manages the custom domain's DNS record and HTTPS certificate.
-Only the built static files are uploaded. Air-quality requests still go directly from the browser to data.gov.sg.
+The deploy uploads the static build and `worker/index.ts`. Browser air-quality requests still go directly to data.gov.sg. The optional badge-test endpoint also reads public PM2.5 data server-side.
 
 The older copy at `https://static.slt.b65.dev/airq/index.html` is a separate deployment.
 `npm run deploy` updates Cloudflare only.
@@ -112,7 +114,7 @@ Then run the complete check:
 npm run verify
 ```
 
-The check runs linting, TypeScript, unit tests, the production build, and a browser test against the built app.
+The check runs linting, TypeScript, unit tests, the production build, Worker integration tests with isolated local D1 storage, and browser tests against the built app.
 
 To test the built app against the live data.gov.sg endpoints, run:
 
@@ -123,5 +125,7 @@ npm run test:live
 ## Data and privacy
 
 The app calls the public PM2.5 and PSI endpoints at `api-open.data.gov.sg`. It stores the location-mode preference and the last successful API responses for an offline error fallback. Your coordinates remain in memory, are not sent to another service, and are not saved.
+
+Background badge enrollment additionally saves interpolation weights on the device in IndexedDB. They expire after 24 hours and are removed on the next service-worker execution. Weights are location-derived sensitive information; enabling background testing explicitly consents to this storage. The server receives only a Web Push subscription, its encryption keys, and a random revocation token. D1 stores the token hash and enrollment expiry. Revocation credentials remain in browser local storage. Foreground-only mode stores the last badge reading, not coordinates or weights.
 
 Readings older than 45 minutes are marked stale. The estimate uses inverse-square distance weighting over the five reference coordinates supplied by the PM2.5 API. It is not an official local measurement.
