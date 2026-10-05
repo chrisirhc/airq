@@ -10,6 +10,9 @@ import {
 } from "./domain";
 import { estimatePm25, type Pm25Estimate } from "./location-estimator";
 
+const ESTIMATION_METHOD_URL =
+  "https://pro.arcgis.com/en/pro-app/3.5/help/analysis/geostatistical-analyst/how-inverse-distance-weighted-interpolation-works.htm";
+
 type DisplayMode =
   | { readonly kind: "manual"; readonly region: Region }
   | { readonly kind: "estimated"; readonly estimate: Pm25Estimate };
@@ -93,6 +96,7 @@ function render(): void {
         <div>
           <h2>Regional data, carefully labeled.</h2>
           <p>NEA reports five broad regions. A location estimate blends their PM2.5 readings by distance. It is an approximation and cannot account for wind, nearby sources, or street-level conditions.</p>
+          <p>Estimate algorithm: <a href="${ESTIMATION_METHOD_URL}" target="_blank" rel="noreferrer">Inverse-distance weighting with power 2, explained by Esri <span aria-hidden="true">↗</span></a>.</p>
           <a href="https://www.nea.gov.sg/our-services/pollution-control/air-pollution/faqs" target="_blank" rel="noreferrer">Read NEA guidance <span aria-hidden="true">↗</span></a>
         </div>
       </section>
@@ -218,6 +222,7 @@ function renderContributions(estimate: Pm25Estimate): string {
       </div>
       <p class="estimate-equation">${terms} ≈ ${estimate.value.toFixed(2)} µg/m³</p>
       <p>Multiply each regional reading by its weight, then add the results. The headline rounds this to ${Math.round(estimate.value)} µg/m³. Distances and weights above are rounded for display; the calculation uses their full precision.</p>
+      <p><a href="${ESTIMATION_METHOD_URL}" target="_blank" rel="noreferrer">Read Esri's explanation of inverse-distance weighting <span aria-hidden="true">↗</span></a>. This estimate uses power 2 with all five regional reference points.</p>
     </section>
   `;
 }
