@@ -181,8 +181,27 @@ h1 {
   opacity: 0.65;
 }
 
+.location-button.is-active {
+  background: var(--green);
+  box-shadow: 0 0 0 3px rgba(50, 138, 100, 0.14);
+}
+
+.location-button.is-active:hover:not(:disabled) {
+  background: #256b4d;
+}
+
+@keyframes location-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .location-icon {
   font-size: 21px;
+}
+
+.location-button[aria-busy="true"] .location-icon {
+  animation: location-spin 1.2s linear infinite;
 }
 
 .divider {
@@ -547,6 +566,10 @@ footer {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .location-button[aria-busy="true"] .location-icon {
+    animation: none;
+  }
+
   .skeleton-line {
     animation: none;
   }

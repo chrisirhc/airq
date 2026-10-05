@@ -10,6 +10,10 @@ npm run dev
 ```
 
 Browser geolocation works on `localhost`. Production deployments must use HTTPS.
+On page load, the app checks location permission and automatically uses location if permission is already granted.
+Otherwise, select **Use my location** to request access.
+The button shows **Finding your location…** during lookup and **Using your location** with a green background when the estimate is active.
+Choosing an official region returns to manual readings.
 
 ## Deploy to Cloudflare
 

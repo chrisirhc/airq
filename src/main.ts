@@ -40,8 +40,29 @@ let state: AppState = {
   location: { kind: "idle" },
 };
 
+let locationRequestId = 0;
+
 render();
-void load();
+void initialize();
+
+async function initialize(): Promise<void> {
+  await load();
+  if (
+    !navigator.permissions ||
+    locationRequestId !== 0 ||
+    state.data.kind !== "loaded" ||
+    state.data.snapshot.pm25.kind !== "available"
+  ) {
+    return;
+  }
+
+  try {
+    const permission = await navigator.permissions.query({ name: "geolocation" });
+    if (permission.state === "granted" && locationRequestId === 0) requestLocation();
+  } catch {
+    // Browsers that cannot query geolocation permission retain the manual button.
+  }
+}
 
 async function load(): Promise<void> {
   const snapshot = await loadAirQuality();
@@ -69,9 +90,11 @@ function render(): void {
       </section>
 
       <section class="controls" aria-label="Location and region controls">
-        <button class="location-button" id="location-button" type="button" ${state.location.kind === "requesting" ? "disabled" : ""}>
-          <span class="location-icon" aria-hidden="true">⌖</span>
-          ${state.location.kind === "requesting" ? "Finding your location…" : "Use my location"}
+        <button class="location-button ${state.display.kind === "estimated" ? "is-active" : ""}" id="location-button" type="button"
+          aria-pressed="${state.display.kind === "estimated"}" aria-busy="${state.location.kind === "requesting"}"
+          ${state.location.kind === "requesting" || state.data.kind === "loading" ? "disabled" : ""}>
+          <span class="location-icon" aria-hidden="true">${state.display.kind === "estimated" && state.location.kind !== "requesting" ? "✓" : "⌖"}</span>
+          ${state.data.kind === "loading" ? "Loading readings…" : state.location.kind === "requesting" ? "Finding your location…" : state.display.kind === "estimated" ? "Using your location" : "Use my location"}
         </button>
         <div class="divider" aria-hidden="true"><span>or</span></div>
         <label class="region-field">
@@ -245,11 +268,14 @@ function renderSourceBadge(source: "live" | "cached", stale: boolean): string {
 }
 
 function locationMessage(): string {
+  if (state.location.kind === "requesting") {
+    return `<p class="control-message" role="status">Finding your location to calculate a PM2.5 estimate.</p>`;
+  }
   if (state.location.kind === "error") {
     return `<p class="control-message error" role="alert">${escapeHtml(state.location.message)}</p>`;
   }
   if (state.display.kind === "estimated") {
-    return `<p class="control-message success">Location found. Showing an approximate PM2.5 estimate.</p>`;
+    return `<p class="control-message success" role="status">Location found. Showing an approximate PM2.5 estimate.</p>`;
   }
   return "";
 }
@@ -270,6 +296,7 @@ function bindInteractions(): void {
     if (!(target instanceof HTMLSelectElement)) return;
     const region = REGIONS.find((candidate) => candidate === target.value);
     if (!region) return;
+    locationRequestId += 1;
     state = { ...state, display: { kind: "manual", region }, location: { kind: "idle" } };
     render();
   });
@@ -284,6 +311,7 @@ function bindInteractions(): void {
 }
 
 function requestLocation(): void {
+  const requestId = ++locationRequestId;
   if (!("geolocation" in navigator)) {
     state = {
       ...state,
@@ -296,8 +324,12 @@ function requestLocation(): void {
   state = { ...state, location: { kind: "requesting" } };
   render();
   navigator.geolocation.getCurrentPosition(
-    (position) => applyPosition(position.coords.latitude, position.coords.longitude),
+    (position) => {
+      if (requestId !== locationRequestId) return;
+      applyPosition(position.coords.latitude, position.coords.longitude);
+    },
     (error) => {
+      if (requestId !== locationRequestId) return;
       state = { ...state, location: { kind: "error", message: geolocationError(error) } };
       render();
     },

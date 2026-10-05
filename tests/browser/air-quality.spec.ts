@@ -50,6 +50,9 @@ test("shows exact regional readings and a location estimate", async ({
 }, testInfo) => {
   await context.grantPermissions(["geolocation"]);
   await context.setGeolocation({ latitude: 1.35735, longitude: 103.94 });
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "permissions", { configurable: true, value: undefined });
+  });
   await page.goto("/");
 
   await expect(page.getByText("Central region PM2.5")).toBeVisible();
@@ -73,6 +76,10 @@ test("shows exact regional readings and a location estimate", async ({
     "30",
   );
   await expect(page.getByText("East region PSI")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Using your location" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   const calculation = page.getByRole("region", { name: "Estimate calculation" });
   await expect(calculation).toBeVisible();
   await expect(calculation.getByRole("row")).toHaveCount(6);
@@ -87,6 +94,12 @@ test("shows exact regional readings and a location estimate", async ({
     path: `test-results/airq-home-${testInfo.project.name}.png`,
     fullPage: true,
   });
+  await page.getByRole("combobox").selectOption("central");
+  await expect(page.getByRole("button", { name: "Use my location" })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  await expect(page.getByText("Central region PM2.5")).toBeVisible();
 });
 
 test("explains the weighted estimate using all five regional readings", async ({
@@ -96,8 +109,7 @@ test("explains the weighted estimate using all five regional readings", async ({
   await context.grantPermissions(["geolocation"]);
   await context.setGeolocation({ latitude: 1.32, longitude: 103.88 });
   await page.goto("/");
-  await expect(page.getByText("Central region PM2.5")).toBeVisible();
-  await page.getByRole("button", { name: "Use my location" }).click();
+  await expect(page.getByRole("button", { name: "Using your location" })).toBeVisible();
   const calculation = page.getByRole("region", { name: "Estimate calculation" });
   await expect(calculation).toContainText("Each weight is (1 ÷ distance²)");
   await expect(calculation).toContainText("≈ 30.53 µg/m³");
@@ -109,6 +121,88 @@ test("explains the weighted estimate using all five regional readings", async ({
     path: `test-results/airq-calculation-${testInfo.project.name}.png`,
     fullPage: true,
   });
+});
+
+for (const permission of ["prompt", "denied", "unsupported"]) {
+  test(`does not automatically request location when permission is ${permission}`, async ({
+    page,
+  }) => {
+    await page.addInitScript((permission) => {
+      Object.defineProperty(navigator, "permissions", {
+        configurable: true,
+        value: {
+          query: async () => {
+            document.documentElement.dataset.permissionChecked = "true";
+            if (permission === "unsupported") throw new TypeError("Unsupported permission");
+            return { state: permission };
+          },
+        },
+      });
+      Object.defineProperty(navigator, "geolocation", {
+        configurable: true,
+        value: {
+          getCurrentPosition: () => {
+            document.documentElement.dataset.locationRequested = "true";
+          },
+        },
+      });
+    }, permission);
+    await page.goto("/");
+    await expect(page.locator("html")).toHaveAttribute("data-permission-checked", "true");
+    await expect(page.getByRole("button", { name: "Use my location" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    await expect(page.locator("html")).not.toHaveAttribute("data-location-requested", "true");
+    await expect(page.getByText("Central region PM2.5")).toBeVisible();
+  });
+}
+
+test("shows location progress and respects a manual selection during lookup", async ({
+  context,
+  page,
+}) => {
+  await context.grantPermissions(["geolocation"]);
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "geolocation", {
+      configurable: true,
+      value: {
+        getCurrentPosition: (success: PositionCallback) => {
+          window.addEventListener(
+            "test-location-ready",
+            () =>
+              success({
+                coords: {
+                  latitude: 1.32,
+                  longitude: 103.88,
+                  accuracy: 10,
+                  altitude: null,
+                  altitudeAccuracy: null,
+                  heading: null,
+                  speed: null,
+                  toJSON: () => ({}),
+                },
+                timestamp: Date.now(),
+                toJSON: () => ({}),
+              }),
+            { once: true },
+          );
+        },
+      },
+    });
+  });
+  await page.goto("/");
+  const button = page.getByRole("button", { name: "Finding your location…" });
+  await expect(button).toBeDisabled();
+  await expect(button).toHaveAttribute("aria-busy", "true");
+  await expect(page.getByRole("status")).toContainText("Finding your location");
+  await page.getByRole("combobox").selectOption("west");
+  await page.evaluate(() => window.dispatchEvent(new Event("test-location-ready")));
+  await expect(page.getByText("West region PM2.5")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Use my location" })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
 });
 
 test("keeps manual readings available when location permission is denied", async ({ page }) => {
