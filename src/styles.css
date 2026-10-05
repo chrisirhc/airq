@@ -375,27 +375,49 @@ h1 {
 .contributions {
   position: relative;
   z-index: 1;
-  max-width: 340px;
   color: rgba(255, 255, 255, 0.78);
   font-size: 12px;
 }
 
-.contributions summary {
-  cursor: pointer;
+.contributions h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
   font-weight: 700;
 }
 
-.contributions ul {
-  display: grid;
-  gap: 7px;
-  padding: 12px 0 0;
-  margin: 0;
-  list-style: none;
+.contributions p {
+  line-height: 1.6;
 }
 
-.contributions li {
-  display: flex;
-  justify-content: space-between;
+.contribution-table {
+  overflow-x: auto;
+}
+
+.contributions table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.contributions caption {
+  padding-bottom: 10px;
+  text-align: left;
+}
+
+.contributions th,
+.contributions td {
+  padding: 8px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  text-align: right;
+}
+
+.contributions th:first-child {
+  padding-left: 0;
+  text-align: left;
+}
+
+.estimate-equation {
+  font-variant-numeric: tabular-nums;
 }
 
 .unavailable-card h2 {

@@ -181,24 +181,44 @@ function renderReadings(): string {
 }
 
 function renderContributions(estimate: Pm25Estimate): string {
-  const rows = estimate.contributions
-    .filter((contribution) => contribution.weight >= 0.005)
-    .sort((left, right) => right.weight - left.weight)
+  const contributions = estimate.contributions
+    .slice()
+    .sort((left, right) => right.weight - left.weight);
+  const rows = contributions
     .map(
       (contribution) => `
-        <li>
-          <span>${REGION_LABELS[contribution.region]}</span>
-          <span>${Math.round(contribution.weight * 100)}%</span>
-        </li>
+        <tr>
+          <th scope="row">${REGION_LABELS[contribution.region]}</th>
+          <td>${contribution.value}</td>
+          <td>${(contribution.distanceMeters / 1000).toFixed(2)}</td>
+          <td>${(contribution.weight * 100).toFixed(2)}%</td>
+        </tr>
       `,
     )
     .join("");
 
+  const exact = estimate.contributions.find((contribution) => contribution.distanceMeters <= 1);
+  const method = exact
+    ? `Your location is within 1 metre of the ${REGION_LABELS[exact.region]} reference point, so its reading receives 100% weight and the other regions receive 0%.`
+    : "Distances are measured from your location to the five regional reference points supplied with the PM2.5 data. Each weight is (1 ÷ distance²) divided by the sum of all five (1 ÷ distance²) values. Closer regions receive more weight.";
+  const terms = contributions
+    .map((contribution) => `${contribution.value} × ${(contribution.weight * 100).toFixed(2)}%`)
+    .join(" + ");
+
   return `
-    <details class="contributions">
-      <summary>How this estimate is weighted</summary>
-      <ul>${rows}</ul>
-    </details>
+    <section class="contributions" aria-label="Estimate calculation">
+      <h3>How your estimate is calculated</h3>
+      <p>${method}</p>
+      <div class="contribution-table">
+        <table>
+          <caption>Official 1-hour PM2.5 readings used in this estimate</caption>
+          <thead><tr><th scope="col">Region</th><th scope="col">PM2.5<br>µg/m³</th><th scope="col">Distance<br>km</th><th scope="col">Weight</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <p class="estimate-equation">${terms} ≈ ${estimate.value.toFixed(2)} µg/m³</p>
+      <p>Multiply each regional reading by its weight, then add the results. The headline rounds this to ${Math.round(estimate.value)} µg/m³. Distances and weights above are rounded for display; the calculation uses their full precision.</p>
+    </section>
   `;
 }
 

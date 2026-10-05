@@ -73,11 +73,40 @@ test("shows exact regional readings and a location estimate", async ({
     "30",
   );
   await expect(page.getByText("East region PSI")).toBeVisible();
+  const calculation = page.getByRole("region", { name: "Estimate calculation" });
+  await expect(calculation).toBeVisible();
+  await expect(calculation.getByRole("row")).toHaveCount(6);
+  await expect(calculation.getByRole("row", { name: "East 30 0.00 100.00%" })).toBeVisible();
+  await expect(calculation).toContainText("within 1 metre of the East reference point");
+  await expect(calculation).toContainText("30 × 100.00%");
+  await expect(calculation).toContainText("≈ 30.00 µg/m³");
   await expect(
     page.getByText("Location found. Showing an approximate PM2.5 estimate."),
   ).toBeVisible();
   await page.screenshot({
     path: `test-results/airq-home-${testInfo.project.name}.png`,
+    fullPage: true,
+  });
+});
+
+test("explains the weighted estimate using all five regional readings", async ({
+  context,
+  page,
+}, testInfo) => {
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({ latitude: 1.32, longitude: 103.88 });
+  await page.goto("/");
+  await expect(page.getByText("Central region PM2.5")).toBeVisible();
+  await page.getByRole("button", { name: "Use my location" }).click();
+  const calculation = page.getByRole("region", { name: "Estimate calculation" });
+  await expect(calculation).toContainText("Each weight is (1 ÷ distance²)");
+  await expect(calculation).toContainText("≈ 30.53 µg/m³");
+  await expect(calculation.getByRole("row")).toHaveCount(6);
+  for (const region of ["North", "South", "East", "West", "Central"]) {
+    await expect(calculation.getByRole("rowheader", { name: region, exact: true })).toBeVisible();
+  }
+  await page.screenshot({
+    path: `test-results/airq-calculation-${testInfo.project.name}.png`,
     fullPage: true,
   });
 });
