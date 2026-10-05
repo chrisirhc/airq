@@ -10,10 +10,12 @@ npm run dev
 ```
 
 Browser geolocation works on `localhost`. Production deployments must use HTTPS.
-On page load, the app checks location permission and automatically uses location if permission is already granted.
+On page load, the app resumes a previously successful location choice or uses location if permission is already granted.
+It remembers only whether location mode is enabled, and asks the browser for coordinates again after a refresh.
+Safari may show another permission prompt if its earlier approval has expired.
 Otherwise, select **Use my location** to request access.
 The button shows **Finding your location…** during lookup and **Using your location** with a green background when the estimate is active.
-Choosing an official region returns to manual readings.
+Choosing an official region returns to manual readings and keeps location mode off after a refresh.
 
 ## Deploy to Cloudflare
 
@@ -120,6 +122,6 @@ npm run test:live
 
 ## Data and privacy
 
-The app calls the public PM2.5 and PSI endpoints at `api-open.data.gov.sg`. It stores only the last successful API responses for an offline error fallback. Coordinates remain in memory, are not sent to another service, and are not saved.
+The app calls the public PM2.5 and PSI endpoints at `api-open.data.gov.sg`. It stores the location-mode preference and the last successful API responses for an offline error fallback. Your coordinates remain in memory, are not sent to another service, and are not saved.
 
 Readings older than 45 minutes are marked stale. The estimate uses inverse-square distance weighting over the five reference coordinates supplied by the PM2.5 API. It is not an official local measurement.

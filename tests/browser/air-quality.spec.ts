@@ -158,6 +158,90 @@ for (const permission of ["prompt", "denied", "unsupported"]) {
   });
 }
 
+for (const permission of ["prompt", "unsupported"]) {
+  test(`restores location after refresh when Safari permission is ${permission}`, async ({
+    context,
+    page,
+  }) => {
+    await context.grantPermissions(["geolocation"]);
+    await context.setGeolocation({ latitude: 1.32, longitude: 103.88 });
+    await page.addInitScript((permission) => {
+      Object.defineProperty(navigator, "permissions", {
+        configurable: true,
+        value: {
+          query: async () => {
+            if (permission === "unsupported") throw new TypeError("Unsupported permission");
+            return { state: permission };
+          },
+        },
+      });
+    }, permission);
+    await page.goto("/");
+    await page.getByRole("button", { name: "Use my location" }).click();
+    await expect(page.getByRole("button", { name: "Using your location" })).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Using your location" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(page.getByRole("region", { name: "Estimate calculation" })).toContainText(
+      "≈ 30.53 µg/m³",
+    );
+  });
+}
+
+test("keeps location off after choosing a manual region and refreshing", async ({
+  context,
+  page,
+}) => {
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({ latitude: 1.32, longitude: 103.88 });
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "Using your location" })).toBeVisible();
+  await page.getByRole("combobox").selectOption("west");
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Use my location" })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  await expect(page.getByText("Estimated PM2.5", { exact: true })).toHaveCount(0);
+});
+
+test("stops restoring location after the browser denies a remembered request", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "permissions", {
+      configurable: true,
+      value: { query: async () => ({ state: "prompt" }) },
+    });
+    Object.defineProperty(navigator, "geolocation", {
+      configurable: true,
+      value: {
+        getCurrentPosition: (
+          _success: PositionCallback,
+          error: PositionErrorCallback | undefined,
+        ) => {
+          document.documentElement.dataset.locationRequested = "true";
+          error?.({
+            code: 1,
+            message: "Denied",
+            PERMISSION_DENIED: 1,
+            POSITION_UNAVAILABLE: 2,
+            TIMEOUT: 3,
+          });
+        },
+      },
+    });
+  });
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "Use my location" })).toBeEnabled();
+  await page.evaluate(() => localStorage.setItem("airq:location-mode", "enabled"));
+  await page.reload();
+  await expect(page.getByRole("alert")).toContainText("Location permission was denied");
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Use my location" })).toBeEnabled();
+  await expect(page.locator("html")).not.toHaveAttribute("data-location-requested", "true");
+});
+
 test("shows location progress and respects a manual selection during lookup", async ({
   context,
   page,

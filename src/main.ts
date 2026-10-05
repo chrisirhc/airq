@@ -12,6 +12,7 @@ import { estimatePm25, type Pm25Estimate } from "./location-estimator";
 
 const ESTIMATION_METHOD_URL =
   "https://pro.arcgis.com/en/pro-app/3.5/help/analysis/geostatistical-analyst/how-inverse-distance-weighted-interpolation-works.htm";
+const LOCATION_PREFERENCE_KEY = "airq:location-mode";
 
 type DisplayMode =
   | { readonly kind: "manual"; readonly region: Region }
@@ -48,7 +49,6 @@ void initialize();
 async function initialize(): Promise<void> {
   await load();
   if (
-    !navigator.permissions ||
     locationRequestId !== 0 ||
     state.data.kind !== "loaded" ||
     state.data.snapshot.pm25.kind !== "available"
@@ -56,11 +56,38 @@ async function initialize(): Promise<void> {
     return;
   }
 
+  const preference = readLocationPreference();
+  if (preference === "disabled") return;
+
+  let permission: PermissionState | undefined;
   try {
-    const permission = await navigator.permissions.query({ name: "geolocation" });
-    if (permission.state === "granted" && locationRequestId === 0) requestLocation();
+    permission = (await navigator.permissions?.query({ name: "geolocation" }))?.state;
   } catch {
-    // Browsers that cannot query geolocation permission retain the manual button.
+    // A remembered location choice also works when permission queries are unsupported.
+  }
+
+  if (locationRequestId !== 0) return;
+  if (permission === "denied") {
+    saveLocationPreference("disabled");
+    return;
+  }
+  if (permission === "granted" || preference === "enabled") requestLocation();
+}
+
+function readLocationPreference(): "enabled" | "disabled" | undefined {
+  try {
+    const preference = localStorage.getItem(LOCATION_PREFERENCE_KEY);
+    return preference === "enabled" || preference === "disabled" ? preference : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function saveLocationPreference(preference: "enabled" | "disabled"): void {
+  try {
+    localStorage.setItem(LOCATION_PREFERENCE_KEY, preference);
+  } catch {
+    // Location remains usable when browser storage is unavailable.
   }
 }
 
@@ -297,6 +324,7 @@ function bindInteractions(): void {
     const region = REGIONS.find((candidate) => candidate === target.value);
     if (!region) return;
     locationRequestId += 1;
+    saveLocationPreference("disabled");
     state = { ...state, display: { kind: "manual", region }, location: { kind: "idle" } };
     render();
   });
@@ -330,7 +358,15 @@ function requestLocation(): void {
     },
     (error) => {
       if (requestId !== locationRequestId) return;
-      state = { ...state, location: { kind: "error", message: geolocationError(error) } };
+      if (error.code === error.PERMISSION_DENIED) saveLocationPreference("disabled");
+      state = {
+        ...state,
+        display:
+          error.code === error.PERMISSION_DENIED
+            ? { kind: "manual", region: manualRegion() }
+            : state.display,
+        location: { kind: "error", message: geolocationError(error) },
+      };
       render();
     },
     { enableHighAccuracy: false, timeout: 8_000, maximumAge: 5 * 60 * 1000 },
@@ -368,6 +404,7 @@ function applyPosition(latitude: number, longitude: number): void {
   });
   switch (result.kind) {
     case "estimated":
+      saveLocationPreference("enabled");
       state = {
         ...state,
         display: { kind: "estimated", estimate: result.estimate },
