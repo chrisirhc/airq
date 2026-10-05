@@ -6,3 +6,9 @@ playwright-report/
 coverage/
 *.tsbuildinfo
 .wrangler/
+.env
+.env.*
+.dev.vars
+.dev.vars.*
+!.env.example
+!.dev.vars.example
