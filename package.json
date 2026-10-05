@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "deploy": "npm run build && wrangler deploy",
     "preview": "vite preview",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
@@ -26,6 +27,7 @@
     "jsdom": "^27.0.0",
     "typescript": "^5.9.3",
     "vite": "^7.1.7",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.3",
+    "wrangler": "4.147.0"
   }
 }

@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "airq",
+  "compatibility_date": "2026-10-05",
+  "workers_dev": false,
+  "assets": {
+    "directory": "./dist"
+  },
+  "routes": [
+    {
+      "pattern": "airq.b65.dev",
+      "custom_domain": true
+    }
+  ]
+}

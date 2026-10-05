@@ -11,6 +11,24 @@ npm run dev
 
 Browser geolocation works on `localhost`. Production deployments must use HTTPS.
 
+## Deploy to Cloudflare
+
+Authorize Wrangler with the Cloudflare account that manages `b65.dev`:
+
+```sh
+npx wrangler login
+```
+
+Build and publish the site:
+
+```sh
+npm run deploy
+```
+
+`wrangler.jsonc` configures the `airq` Worker to serve `dist/` at `https://airq.b65.dev/`.
+Cloudflare manages the custom domain's DNS record and HTTPS certificate.
+Only the built static files are uploaded. Air-quality requests still go directly from the browser to data.gov.sg.
+
 ## Verify
 
 Install Playwright's Chromium browser once:
