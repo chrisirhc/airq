@@ -1,15 +1,13 @@
 :root {
-  color: #10293f;
-  background: #f3f0e8;
+  color: #242424;
+  background: #f5f5f5;
   font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --ink: #10293f;
-  --muted: #5c6b76;
-  --paper: #fbfaf6;
-  --line: rgba(16, 41, 63, 0.14);
-  --accent: #e76f51;
-  --green: #328a64;
+  --ink: #242424;
+  --muted: #616161;
+  --paper: #ffffff;
+  --line: rgba(0, 0, 0, 0.16);
 }
 
 * {
@@ -21,7 +19,7 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    radial-gradient(circle at 10% 0%, rgba(255, 255, 255, 0.9), transparent 34rem), #f3f0e8;
+    radial-gradient(circle at 10% 0%, rgba(255, 255, 255, 0.9), transparent 34rem), #f5f5f5;
 }
 
 button,
@@ -81,7 +79,7 @@ a {
   display: block;
   width: 4px;
   border-radius: 2px;
-  background: #f3f0e8;
+  background: #f5f5f5;
 }
 
 .brand-mark i:nth-child(1) {
@@ -110,7 +108,7 @@ a {
 .eyebrow,
 .card-kicker {
   margin: 0 0 16px;
-  color: var(--accent);
+  color: var(--muted);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.13em;
@@ -149,8 +147,8 @@ h1 {
   padding: 28px;
   border: 1px solid var(--line);
   border-radius: 18px;
-  background: rgba(251, 250, 246, 0.78);
-  box-shadow: 0 20px 60px rgba(16, 41, 63, 0.06);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.06);
 }
 
 .location-button {
@@ -172,7 +170,7 @@ h1 {
 }
 
 .location-button:hover:not(:disabled) {
-  background: #183b56;
+  background: #404040;
   transform: translateY(-1px);
 }
 
@@ -182,12 +180,11 @@ h1 {
 }
 
 .location-button.is-active {
-  background: var(--green);
-  box-shadow: 0 0 0 3px rgba(50, 138, 100, 0.14);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.2);
 }
 
 .location-button.is-active:hover:not(:disabled) {
-  background: #256b4d;
+  background: #404040;
 }
 
 @keyframes location-spin {
@@ -208,7 +205,7 @@ h1 {
   display: flex;
   align-items: center;
   align-self: stretch;
-  color: #84909a;
+  color: var(--muted);
   font-size: 12px;
   text-transform: uppercase;
 }
@@ -226,7 +223,7 @@ h1 {
 .region-field select {
   min-height: 52px;
   padding: 0 42px 0 16px;
-  border: 1px solid rgba(16, 41, 63, 0.24);
+  border: 1px solid #949494;
   border-radius: 10px;
   color: var(--ink);
   background: white;
@@ -251,10 +248,8 @@ h1 {
 }
 
 .control-message.error {
-  color: #a33d2e;
-}
-.control-message.success {
-  color: #23694d;
+  color: var(--ink);
+  border-top-style: dashed;
 }
 
 .readings {
@@ -274,41 +269,45 @@ h1 {
   background: var(--paper);
 }
 
-.reading-card::after {
-  position: absolute;
-  right: -80px;
-  bottom: -130px;
-  width: 280px;
-  height: 280px;
+/* PM2.5 is app-defined (ADR-002); PSI follows Haze.gov.sg (ADR-001). */
+.pm25-tone-1 {
+  --severity: #479b02;
+}
+.pm25-tone-2 {
+  --severity: #ffce03;
+}
+.pm25-tone-3 {
+  --severity: #ffa800;
+}
+.pm25-tone-4 {
+  --severity: #d60000;
+}
+
+.psi-tone-1 {
+  --severity: #479b02;
+}
+.psi-tone-2 {
+  --severity: #006fa1;
+}
+.psi-tone-3 {
+  --severity: #ffce03;
+}
+.psi-tone-4 {
+  --severity: #ffa800;
+}
+.psi-tone-5 {
+  --severity: #d60000;
+}
+
+.severity-marker {
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  margin-right: 0.5em;
+  border: 1px solid var(--muted);
   border-radius: 50%;
-  background: var(--tone, rgba(50, 138, 100, 0.11));
-  content: "";
-  pointer-events: none;
-}
-
-.primary-card {
-  background: var(--ink);
-  color: white;
-}
-
-.primary-card::after {
-  opacity: 0.45;
-}
-
-.tone-1 {
-  --tone: rgba(50, 138, 100, 0.2);
-}
-.tone-2 {
-  --tone: rgba(54, 132, 174, 0.22);
-}
-.tone-3 {
-  --tone: rgba(239, 190, 75, 0.25);
-}
-.tone-4 {
-  --tone: rgba(231, 111, 81, 0.25);
-}
-.tone-5 {
-  --tone: rgba(174, 50, 72, 0.22);
+  background: var(--severity);
+  vertical-align: -0.02em;
 }
 
 .card-heading {
@@ -335,19 +334,16 @@ h1 {
   padding: 6px 9px;
   border: 1px solid currentColor;
   border-radius: 999px;
-  color: var(--green);
+  color: var(--muted);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.primary-card .data-badge {
-  color: #94d6ba;
-}
-.data-badge.warning,
-.primary-card .data-badge.warning {
-  color: #e8a88d;
+.data-badge.warning {
+  color: var(--ink);
+  border-style: dashed;
 }
 
 .reading-value {
@@ -385,16 +381,10 @@ h1 {
   margin: 20px 0 0;
 }
 
-.primary-card .card-kicker,
-.primary-card .timestamp,
-.primary-card .card-detail {
-  color: rgba(255, 255, 255, 0.67);
-}
-
 .contributions {
   position: relative;
   z-index: 1;
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--muted);
   font-size: 12px;
 }
 
@@ -426,7 +416,7 @@ h1 {
 .contributions th,
 .contributions td {
   padding: 8px 4px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  border-bottom: 1px solid var(--line);
   text-align: right;
 }
 
@@ -460,7 +450,7 @@ h1 {
   height: 24px;
   margin: 18px 0;
   border-radius: 4px;
-  background: linear-gradient(90deg, #e5e1d7 25%, #f4f1e9 50%, #e5e1d7 75%);
+  background: linear-gradient(90deg, #e0e0e0 25%, #f5f5f5 50%, #e0e0e0 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
@@ -516,7 +506,7 @@ footer {
 }
 
 :focus-visible {
-  outline: 3px solid #e76f51;
+  outline: 3px solid var(--ink);
   outline-offset: 3px;
 }
 
@@ -581,9 +571,9 @@ footer {
 .badge-controls {
   margin-top: 2rem;
   padding: 1.5rem;
-  border: 1px solid #d4ddd8;
+  border: 1px solid var(--line);
   border-radius: 1rem;
-  background: #fffdf7;
+  background: var(--paper);
 }
 .badge-controls h2 {
   font-size: 1.4rem;
@@ -600,8 +590,8 @@ footer {
 .badge-actions button {
   padding: 0.8rem 1rem;
   border-radius: 0.6rem;
-  border: 1px solid #10293f;
-  background: #10293f;
+  border: 1px solid var(--ink);
+  background: var(--ink);
   color: white;
   cursor: pointer;
 }
@@ -610,6 +600,6 @@ footer {
   cursor: default;
 }
 .badge-actions button:focus-visible {
-  outline: 3px solid #558a77;
+  outline: 3px solid var(--ink);
   outline-offset: 3px;
 }

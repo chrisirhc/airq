@@ -2,7 +2,7 @@ export type Pm25Band =
   | { readonly level: 1; readonly label: "Normal" }
   | { readonly level: 2; readonly label: "Elevated" }
   | { readonly level: 3; readonly label: "High" }
-  | { readonly level: 4; readonly label: "Very high" };
+  | { readonly level: 4; readonly label: "Very High" };
 
 export type PsiDescriptor = "Good" | "Moderate" | "Unhealthy" | "Very unhealthy" | "Hazardous";
 
@@ -10,7 +10,7 @@ export function classifyPm25(value: number): Pm25Band {
   if (value <= 55) return { level: 1, label: "Normal" };
   if (value <= 150) return { level: 2, label: "Elevated" };
   if (value <= 250) return { level: 3, label: "High" };
-  return { level: 4, label: "Very high" };
+  return { level: 4, label: "Very High" };
 }
 
 export function classifyPsi(value: number): PsiDescriptor {
@@ -23,7 +23,7 @@ export function classifyPsi(value: number): PsiDescriptor {
 
 export function statusTone(value: number, metric: "pm25" | "psi"): string {
   const level = metric === "pm25" ? classifyPm25(value).level : psiLevel(value);
-  return `tone-${level}`;
+  return `${metric}-tone-${level}`;
 }
 
 function psiLevel(value: number): 1 | 2 | 3 | 4 | 5 {

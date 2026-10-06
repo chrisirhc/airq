@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <title>AirQ</title>
-  <rect width="512" height="512" fill="#10293f"/>
-  <path d="M145 179h180m-180 43h222m-222 43h137" stroke="#8bd0ba" stroke-width="18" stroke-linecap="round"/>
+  <rect width="512" height="512" fill="#242424"/>
+  <path d="M145 179h180m-180 43h222m-222 43h137" stroke="#e0e0e0" stroke-width="18" stroke-linecap="round"/>
   <text x="256" y="354" text-anchor="middle" font-family="Arial,sans-serif" font-size="82" font-weight="700" fill="#ffffff">AirQ</text>
 </svg>

@@ -5,8 +5,8 @@
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#f4f1e9",
-  "theme_color": "#10293f",
+  "background_color": "#f5f5f5",
+  "theme_color": "#242424",
   "description": "Singapore regional PM2.5 readings and approximate location estimates.",
   "icons": [
     {

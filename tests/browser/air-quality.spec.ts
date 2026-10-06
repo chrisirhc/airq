@@ -17,6 +17,77 @@ test.beforeEach(async ({ page }) => {
   );
 });
 
+for (const [value, descriptor, color] of [
+  [50, "Good", "rgb(71, 155, 2)"],
+  [100, "Moderate", "rgb(0, 111, 161)"],
+  [200, "Unhealthy", "rgb(255, 206, 3)"],
+  [300, "Very unhealthy", "rgb(255, 168, 0)"],
+  [301, "Hazardous", "rgb(214, 0, 0)"],
+] as const) {
+  test(`uses an official severity marker for PSI ${descriptor}`, async ({ page }) => {
+    const response = structuredClone(psiResponse);
+    response.data.items[0].readings.psi_twenty_four_hourly.central = value;
+    await page.route("https://api-open.data.gov.sg/v2/real-time/api/psi", (route) =>
+      route.fulfill({ json: response }),
+    );
+    await page.goto("/");
+    const psi = page.locator(".reading-card").filter({ hasText: "Central region PSI" });
+    const pm25 = page.locator(".primary-card");
+    await expect(psi.locator(".status-label")).toHaveText(descriptor);
+    await expect(psi.locator(".severity-marker")).toHaveCSS("background-color", color);
+    await expect(psi.locator(".severity-marker")).toHaveAttribute("aria-hidden", "true");
+    await expect(psi.locator(".status-label")).toHaveCSS("color", "rgb(36, 36, 36)");
+    await expect(psi).toHaveCSS("background-color", "rgb(255, 255, 255)");
+    await expect(pm25).toHaveCSS("background-color", "rgb(255, 255, 255)");
+    await expect(pm25.locator(".status-label")).toHaveText("Band 1 · Normal");
+    await expect(pm25.locator(".severity-marker")).toHaveCSS("background-color", "rgb(71, 155, 2)");
+    await expect(psi.locator(".data-badge")).toHaveCSS("color", "rgb(97, 97, 97)");
+    expect(await psi.evaluate((element) => getComputedStyle(element, "::after").content)).toBe(
+      "none",
+    );
+  });
+}
+
+for (const [value, label, color] of [
+  [55, "Band 1 · Normal", "rgb(71, 155, 2)"],
+  [56, "Band 2 · Elevated", "rgb(255, 206, 3)"],
+  [150, "Band 2 · Elevated", "rgb(255, 206, 3)"],
+  [151, "Band 3 · High", "rgb(255, 168, 0)"],
+  [250, "Band 3 · High", "rgb(255, 168, 0)"],
+  [251, "Band 4 · Very High", "rgb(214, 0, 0)"],
+] as const) {
+  test(`colors PM2.5 ${value} with its own band palette`, async ({ page }) => {
+    const response = structuredClone(pm25Response);
+    response.data.items[0].readings.pm25_one_hourly.central = value;
+    await page.route("https://api-open.data.gov.sg/v2/real-time/api/pm25", (route) =>
+      route.fulfill({ json: response }),
+    );
+    await page.goto("/");
+    const card = page.locator(".primary-card");
+    await expect(card.locator(".status-label")).toHaveText(label);
+    await expect(card.locator(".severity-marker")).toHaveCSS("background-color", color);
+    await expect(card.locator(".severity-marker")).toHaveAttribute("aria-hidden", "true");
+    await expect(card.locator(".status-label")).toHaveCSS("color", "rgb(36, 36, 36)");
+  });
+}
+
+test("keeps stale data warnings neutral and explicit", async ({ page }) => {
+  const response = structuredClone(psiResponse);
+  response.data.items[0].timestamp = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  response.data.items[0].updatedTimestamp = response.data.items[0].timestamp;
+  await page.route("https://api-open.data.gov.sg/v2/real-time/api/psi", (route) =>
+    route.fulfill({ json: response }),
+  );
+  await page.goto("/");
+  const warning = page
+    .locator(".reading-card")
+    .filter({ hasText: "Central region PSI" })
+    .locator(".data-badge");
+  await expect(warning).toContainText("Stale");
+  await expect(warning).toHaveCSS("color", "rgb(36, 36, 36)");
+  await expect(warning).toHaveCSS("border-top-style", "dashed");
+});
+
 test("shows a nearby OneMap name without interpreting it as HTML", async ({ context, page }) => {
   await context.grantPermissions(["geolocation"]);
   await context.setGeolocation({ latitude: 1.3254295, longitude: 103.9005321 });

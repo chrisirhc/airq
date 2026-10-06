@@ -295,7 +295,7 @@ function renderReadings(): string {
         <div class="card-heading">
           <div>
             <p class="card-kicker">${label}</p>
-            <p class="status-label">Band ${band.level} · ${band.label}</p>
+            <p class="status-label"><span class="severity-marker" aria-hidden="true"></span>Band ${band.level} · ${band.label}</p>
           </div>
           ${renderSourceBadge(pm25.source, pm25.reading.stale)}
         </div>
@@ -317,7 +317,7 @@ function renderReadings(): string {
         <div class="card-heading">
           <div>
             <p class="card-kicker">${REGION_LABELS[selectedRegion]} region PSI</p>
-            <p class="status-label">${classifyPsi(value)}</p>
+            <p class="status-label"><span class="severity-marker" aria-hidden="true"></span>${classifyPsi(value)}</p>
           </div>
           ${renderSourceBadge(psi.source, psi.reading.stale)}
         </div>
