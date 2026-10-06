@@ -62,6 +62,14 @@ try {
       .map((statement) => db.prepare(statement)),
   );
   const origin = "https://airq.test";
+  const location = await worker.fetch(`${origin}/api/location`, {
+    method: "POST",
+    headers: { Origin: origin, "Content-Type": "application/json" },
+    body: JSON.stringify({ latitude: 1.3254295, longitude: 103.9005321 }),
+  });
+  assert.equal(location.status, 503);
+  assert.deepEqual(await location.json(), { error: "Location name unavailable" });
+  assert.equal(location.headers.get("Cache-Control"), "no-store");
   const subscription = {
     endpoint: "https://web.push.apple.com/test",
     expirationTime: null,

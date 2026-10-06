@@ -122,10 +122,25 @@ To test the built app against the live data.gov.sg endpoints, run:
 npm run test:live
 ```
 
+## Configure OneMap location names
+
+Register a [OneMap account](https://www.onemap.gov.sg/apidocs/register), then configure the Worker secrets. Enter the values at the prompts; do not put credentials in source code:
+
+```sh
+npx wrangler secret put ONEMAP_EMAIL
+npx wrangler secret put ONEMAP_PASSWORD
+```
+
+The Worker obtains an authentication token and reuses it in memory until one minute before expiry. OneMap tokens last three days. Concurrent lookups in the same Worker isolate share token acquisition. Separate isolates obtain their own tokens. Lookups search for buildings within 100 metres and choose the nearest usable name. The UI says "near" because browser coordinates and the nearest address may not identify the user's exact building.
+
+OneMap publishes a 300-call/minute limit. The app performs one lookup per accepted browser position, with no polling or automatic retries. The Worker returns `Cache-Control: no-store`, and credentials and tokens never reach the browser. Missing credentials, upstream errors, timeouts and rate limits fall back to the generic location label.
+
+For local end-to-end use, copy `.dev.vars.example` to `.dev.vars`, fill in your credentials, run `npm run build`, then `npx wrangler dev`. Vite's standalone dev/preview server does not run the Worker, so it uses the generic location label.
+
 ## Data and privacy
 
-The app calls the public PM2.5 and PSI endpoints at `api-open.data.gov.sg`. It stores the location-mode preference and the last successful API responses for an offline error fallback. Your coordinates remain in memory, are not sent to another service, and are not saved.
+The app calls the public PM2.5 and PSI endpoints at `api-open.data.gov.sg`. It stores the location-mode preference and the last successful API responses for an offline error fallback. In location mode, coordinates are sent in a POST body to the AirQ Worker, which forwards them to OneMap to find a nearby building or road name. AirQ does not log, cache, or save the coordinates or location name. OneMap's own data practices apply to its processing. A failed lookup leaves the air-quality estimate usable with the generic "Your location" label.
 
-Background badge enrollment additionally saves interpolation weights on the device in IndexedDB. They expire after 24 hours and are removed on the next service-worker execution. Weights are location-derived sensitive information; enabling background testing explicitly consents to this storage. The server receives only a Web Push subscription, its encryption keys, and a random revocation token. D1 stores the token hash and enrollment expiry. Revocation credentials remain in browser local storage. Foreground-only mode stores the last badge reading, not coordinates or weights.
+Background badge enrollment additionally saves interpolation weights on the device in IndexedDB. They expire after 24 hours and are removed on the next service-worker execution. Weights are location-derived sensitive information; enabling background testing explicitly consents to this storage. For background badge enrollment, the server receives only a Web Push subscription, its encryption keys, and a random revocation token. D1 stores the token hash and enrollment expiry. Revocation credentials remain in browser local storage. Foreground-only mode stores the last badge reading, not coordinates or weights.
 
 Readings older than 45 minutes are marked stale. The estimate uses inverse-square distance weighting over the five reference coordinates supplied by the PM2.5 API. It is not an official local measurement.

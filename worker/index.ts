@@ -7,9 +7,10 @@ import {
 } from "../src/badge-domain";
 import { parsePm25 } from "../src/public-readings";
 import { enrollmentSchema, pushSubscriptionSchema, testStatusSchema } from "../src/push-protocol";
+import { handleLocation, type OneMapEnv } from "./onemap";
 import { deliverPush } from "./push-delivery";
 
-interface Env {
+interface Env extends OneMapEnv {
   ASSETS: Fetcher;
   BADGE_DB?: D1Database;
   VAPID_PUBLIC_KEY?: string;
@@ -76,6 +77,7 @@ async function collectSnapshot(db: D1Database) {
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname === "/api/location") return handleLocation(request, env);
     if (!url.pathname.startsWith("/api/badge/")) {
       const response = await env.ASSETS.fetch(request);
       if (url.pathname.endsWith("/sw.js") || url.pathname.endsWith("/manifest.webmanifest")) {

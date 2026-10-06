@@ -11,12 +11,14 @@ import {
 import { classifyPm25, classifyPsi, statusTone } from "./classifiers";
 import {
   type AirQualitySnapshot,
+  type Coordinate,
   coordinateSchema,
   REGION_LABELS,
   REGIONS,
   type Region,
 } from "./domain";
 import { estimatePm25, type Pm25Estimate } from "./location-estimator";
+import { lookupLocationName } from "./location-name";
 
 const ESTIMATION_METHOD_URL =
   "https://pro.arcgis.com/en/pro-app/3.5/help/analysis/geostatistical-analyst/how-inverse-distance-weighted-interpolation-works.htm";
@@ -29,6 +31,7 @@ type DisplayMode =
       readonly estimate: Pm25Estimate;
       readonly referenceFingerprint: string;
       readonly capturedAt: number;
+      readonly locationName: string | null;
     };
 
 type DataState =
@@ -224,7 +227,7 @@ function render(): void {
             ).join("")}
           </select>
         </label>
-        <p class="privacy-note">Your coordinates stay in this browser and are not saved.</p>
+        <p class="privacy-note">To name your location, coordinates are sent through our server to OneMap. AirQ does not save them.</p>
         ${locationMessage()}
       </section>
 
@@ -396,7 +399,8 @@ function locationMessage(): string {
     return `<p class="control-message error" role="alert">${escapeHtml(state.location.message)}</p>`;
   }
   if (state.display.kind === "estimated") {
-    return `<p class="control-message success" role="status">Location found. Showing an approximate PM2.5 estimate.</p>`;
+    const name = state.display.locationName;
+    return `<p class="control-message">Your location${name ? `: near ${escapeHtml(name)}. <a href="https://www.onemap.gov.sg/" target="_blank" rel="noreferrer">OneMap, Singapore Land Authority</a>` : ""}</p><p class="control-message success" role="status">Location found. Showing an approximate PM2.5 estimate.</p>`;
   }
   return "";
 }
@@ -509,9 +513,11 @@ function applyPosition(latitude: number, longitude: number): void {
           estimate: result.estimate,
           referenceFingerprint: referenceFingerprint(pm25.references),
           capturedAt: Date.now(),
+          locationName: null,
         },
         location: { kind: "idle" },
       };
+      void updateLocationName(coordinate.data, locationRequestId);
       break;
     case "outside-coverage":
       state = {
@@ -531,6 +537,14 @@ function applyPosition(latitude: number, longitude: number): void {
     }
   }
   syncBadge(result.kind === "estimated");
+  render();
+}
+
+async function updateLocationName(coordinate: Coordinate, requestId: number): Promise<void> {
+  const locationName = await lookupLocationName(coordinate);
+  if (requestId !== locationRequestId || state.display.kind !== "estimated" || !locationName)
+    return;
+  state = { ...state, display: { ...state.display, locationName } };
   render();
 }
 

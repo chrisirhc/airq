@@ -6,12 +6,64 @@ import { pm25Response, psiResponse } from "./fixtures";
 test.use({ serviceWorkers: "block" });
 
 test.beforeEach(async ({ page }) => {
+  await page.route("**/api/location", (route) =>
+    route.fulfill({ status: 503, json: { error: "Location name unavailable" } }),
+  );
   await page.route("https://api-open.data.gov.sg/v2/real-time/api/pm25", (route) =>
     route.fulfill({ json: pm25Response }),
   );
   await page.route("https://api-open.data.gov.sg/v2/real-time/api/psi", (route) =>
     route.fulfill({ json: psiResponse }),
   );
+});
+
+test("shows a nearby OneMap name without interpreting it as HTML", async ({ context, page }) => {
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({ latitude: 1.3254295, longitude: 103.9005321 });
+  let coordinates: unknown;
+  await page.route("**/api/location", async (route) => {
+    coordinates = route.request().postDataJSON();
+    expect(route.request().method()).toBe("POST");
+    await route.fulfill({ json: { label: "351 UBI AVENUE 1 <img src=x>" } });
+  });
+  await page.goto("/");
+  await expect(page.getByText("Your location: near 351 UBI AVENUE 1 <img src=x>.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "OneMap, Singapore Land Authority" })).toBeVisible();
+  await expect(page.locator(".control-message img")).toHaveCount(0);
+  expect(coordinates).toEqual({ latitude: 1.3254295, longitude: 103.9005321 });
+  await expect(page.getByText("Estimated PM2.5", { exact: true })).toBeVisible();
+});
+
+test("keeps the estimate when OneMap has no name", async ({ context, page }) => {
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({ latitude: 1.3254295, longitude: 103.9005321 });
+  await page.route("**/api/location", (route) => route.fulfill({ json: { label: null } }));
+  await page.goto("/");
+  await expect(page.getByText("Your location", { exact: true })).toBeVisible();
+  await expect(page.getByText("Estimated PM2.5", { exact: true })).toBeVisible();
+});
+
+test("ignores a late location name after selecting a region", async ({ context, page }) => {
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({ latitude: 1.3254295, longitude: 103.9005321 });
+  let release: (() => void) | undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/location", async (route) => {
+    await gate;
+    await route.fulfill({ json: { label: "KAMPONG UBI VIEW" } });
+  });
+  const lookup = page.waitForRequest("**/api/location");
+  await page.goto("/");
+  await lookup;
+  await page.getByRole("combobox").selectOption("west");
+  const response = page.waitForResponse("**/api/location");
+  release?.();
+  await response;
+  await expect(page.getByText("West region PM2.5")).toBeVisible();
+  await expect(page.getByText(/KAMPONG UBI VIEW/)).toHaveCount(0);
+  await expect(page.getByText("Your location", { exact: true })).toHaveCount(0);
 });
 
 test("shows exact regional readings and a location estimate", async ({
