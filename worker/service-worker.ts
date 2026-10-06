@@ -81,10 +81,19 @@ self.addEventListener("message", (event) => {
       try {
         const state = applyBadgeCommand(await readState(), command.data);
         await writeState(state);
-        if (command.data.kind !== "status" || state.mode !== "disabled") await present(state);
+        if (command.data.kind === "clear-for-test") {
+          if (!("setAppBadge" in self.navigator)) throw new Error("Badge API unavailable");
+          await self.navigator.setAppBadge(0);
+        } else if (command.data.kind !== "status" || state.mode !== "disabled")
+          await present(state);
         event.ports[0]?.postMessage({ state, decision: currentDecision(state, Date.now()) });
       } catch {
-        event.ports[0]?.postMessage({ error: "Badge storage is unavailable" });
+        event.ports[0]?.postMessage({
+          error:
+            command.data.kind === "clear-for-test"
+              ? "Could not clear the badge for testing. Check Home Screen badge permission and try again."
+              : "Badge storage is unavailable",
+        });
       }
     }),
   );
@@ -103,7 +112,11 @@ self.addEventListener("push", (event) => {
         }
         const parsed = regionalSnapshotSchema.safeParse(raw);
         if (parsed.success && state.mode === "background") {
-          state = { ...state, snapshot: newestSnapshot(state.snapshot, parsed.data) };
+          state = {
+            mode: "background",
+            target: state.target,
+            snapshot: newestSnapshot(state.snapshot, parsed.data),
+          };
         }
         await writeState(state);
         await present(state);

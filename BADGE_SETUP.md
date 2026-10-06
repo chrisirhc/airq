@@ -65,10 +65,11 @@ Use iOS 16.4 or later. Browser automation cannot prove native Home Screen icon d
 3. Select **Use my location** or choose an official region. Note the displayed rounded PM2.5 value and reading time.
 4. Select **Enable foreground-only badge** and allow notifications. Check that the Home Screen badge displays the rounded reading. If the reading is zero, expect no numeric badge.
 5. Return to AirQ and select **Enable background test and notifications**. This consents to device-local saved weights and visible background notifications. It does not enable automatic delivery.
-6. Select **Send test notification**, then close AirQ immediately. The server starts delivery after ten seconds. Test requests are limited to one per minute per enrollment.
-7. Check that a visible notification arrives and the badge matches its rounded reading. The notification labels the saved location or region, units, and official reading time. Readings may change between step 3 and delivery.
-8. Open the notification. Confirm that it opens AirQ. Choose another region, send another test, and verify the badge uses that region.
-9. Select **Disable badge and notifications**. Confirm the number clears. An already in-flight push may still show a nonnumeric status notification, but must not restore a number.
+6. Select **Clear badge for test**. Check the Home Screen and confirm that the number is absent. Push enrollment stays enabled. Refreshing AirQ does not restore the number while the test-clear state is active. If the button reports an old service worker, close every AirQ window and reopen the installed app.
+7. Select **Send test notification**, then close AirQ immediately. The server starts delivery after ten seconds. Test requests are limited to one per minute per enrollment.
+8. Before reopening AirQ, confirm that a visible notification arrives and the badge reappears with its rounded reading. This proves the push restored the badge even when the official reading is unchanged. A zero reading has no numeric badge, so choose a nonzero region for this test. The notification labels the saved location or region, units, and official reading time.
+9. Open the notification. Confirm that it opens AirQ. Choose another region, clear the badge for testing, and send another test. Verify the badge uses that region.
+10. Select **Disable badge and notifications**. Confirm the number clears. An already in-flight push may still show a nonnumeric status notification, but must not restore a number.
 
 Record device model, iOS version, reading time, expected rounded value, observed badge, notification arrival, and opt-out result. Only a successful physical-device result passes the gate.
 

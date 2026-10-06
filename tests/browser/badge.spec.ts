@@ -46,7 +46,7 @@ test("reports rejected test delivery instead of leaving it requested", async ({
   const worker = context.serviceWorkers()[0];
   if (!worker) throw new Error("Missing badge worker");
   await worker.evaluate(
-    "Object.defineProperty(self.navigator, 'setAppBadge', { value: async () => {} });",
+    "self.badges = []; Object.defineProperty(self.navigator, 'setAppBadge', { value: async (n) => self.badges.push(n) });",
   );
   await page.evaluate(async () => {
     const registration = await navigator.serviceWorker.ready;
@@ -77,6 +77,21 @@ test("reports rejected test delivery instead of leaving it requested", async ({
     );
   });
   await page.reload();
+  await page.getByRole("button", { name: "Clear badge for test" }).click();
+  await expect(page.locator("#badge-status")).toContainText(
+    "Badge cleared for test. Push stays enabled.",
+  );
+  expect(await worker.evaluate("self.badges.at(-1)")).toBe(0);
+  await page.reload();
+  await expect(page.locator("#badge-status")).toContainText(
+    "Badge cleared for test. Push stays enabled.",
+  );
+  expect(await worker.evaluate("self.badges.at(-1)")).toBe(0);
+  expect(
+    await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("airq:push-enrollment:v1") ?? "null"),
+    ),
+  ).toEqual({ id: "a".repeat(64), token: "A".repeat(43) });
   await page.getByRole("button", { name: "Send test notification" }).click();
   await expect(page.locator("#badge-test-status")).toContainText(
     "Push service rejected the test (HTTP 403)",
@@ -290,12 +305,19 @@ test("uses the real service worker for target persistence, ordering, and opt-out
   };
   await send({ kind: "target", target: { kind: "region", region: "east" }, snapshot });
   expect(await worker.evaluate("self.badges.at(-1)")).toBe(30);
+  await send({ kind: "clear-for-test" });
+  expect(await worker.evaluate("self.badges.at(-1)")).toBe(0);
+  await send({ kind: "status" });
+  await send({ kind: "snapshot", snapshot });
+  expect(await worker.evaluate("self.badges.at(-1)")).toBe(0);
   const push = (data: unknown) =>
     worker.evaluate(`new Promise((resolve, reject) => {
     const event = new PushEvent('push', {data: ${JSON.stringify(JSON.stringify(data))}});
     Object.defineProperty(event, 'waitUntil', { value: (promise) => promise.then(resolve, reject) });
     self.dispatchEvent(event);
   })`);
+  await push(snapshot);
+  expect(await worker.evaluate("self.badges.at(-1)")).toBe(30);
   await push({ ...snapshot, revision: 1, values: { ...snapshot.values, east: 99 } });
   expect(await worker.evaluate("self.badges.at(-1)")).toBe(30);
   expect(await worker.evaluate("self.notifications.at(-1).title")).toBe("PM2.5 30 µg/m³");
@@ -309,7 +331,7 @@ test("uses the real service worker for target persistence, ordering, and opt-out
   expect(await worker.evaluate("self.notifications.at(-1).body")).toContain(
     "No current background estimate",
   );
-  expect(await worker.evaluate("self.notifications.length")).toBe(3);
+  expect(await worker.evaluate("self.notifications.length")).toBe(4);
   await page.reload();
   expect(await send({ kind: "status" })).toMatchObject({ state: { mode: "disabled" } });
 });

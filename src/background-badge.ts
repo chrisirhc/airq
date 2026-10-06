@@ -51,8 +51,16 @@ export function createBackgroundBadge(onChange: () => void) {
         worker.postMessage(input, [channel.port2]);
       });
       const parsed = responseSchema.safeParse(result);
-      if (!parsed.success)
-        throw new Error("Badge storage is unavailable. No saved target was updated.");
+      if (!parsed.success) {
+        const failure = z.object({ error: z.string() }).safeParse(result);
+        throw new Error(
+          failure.success && failure.data.error === "Invalid badge command"
+            ? "Close every AirQ window and reopen the installed app to activate the new badge controls."
+            : failure.success
+              ? failure.data.error
+              : "Badge storage is unavailable. No saved target was updated.",
+        );
+      }
       state = parsed.data.state;
     } finally {
       channel.port1.close();
@@ -274,9 +282,11 @@ export function createBackgroundBadge(onChange: () => void) {
     const detail =
       decision.kind === "reading"
         ? `Badge ${decision.rounded} µg/m³, ${label}. Reading at ${new Date(decision.readingAt).toLocaleTimeString("en-SG", { timeZone: "Asia/Singapore" })}.`
-        : active
-          ? `Badge cleared: ${decision.reason}.`
-          : "Badge is off.";
+        : decision.reason === "test"
+          ? "Badge cleared for test. Push stays enabled. Send a test and close AirQ; check that the number reappears before reopening. A zero reading cannot show a numeric badge."
+          : active
+            ? `Badge cleared: ${decision.reason}.`
+            : "Badge is off.";
     const expiry =
       target?.kind === "estimate"
         ? `<p>Saved location expires ${new Date(target.expiresAt).toLocaleString("en-SG", { timeZone: "Asia/Singapore" })}. Use your location again to refresh it.</p>`
@@ -291,6 +301,7 @@ export function createBackgroundBadge(onChange: () => void) {
         <button id="badge-background" type="button" ${!supported || !registration || !configured || !current || busy || state.mode === "background" ? "disabled" : ""}>Enable background test and notifications</button>
         ${active || message ? `<button id="badge-disable" type="button" ${busy ? "disabled" : ""}>Disable badge and notifications</button>` : ""}
         ${state.mode === "background" ? `<button id="badge-test" type="button" ${busy ? "disabled" : ""}>Send test notification</button>` : ""}
+        ${state.mode === "background" ? `<button id="badge-clear-test" type="button" ${busy ? "disabled" : ""}>Clear badge for test</button>` : ""}
       </div>
       <p role="status" id="badge-status">${busy ? "Updating badge settings…" : escapeText(detail)} ${escapeText(message)}</p>${expiry}
       ${state.mode === "background" ? `<p role="status" id="badge-test-status">${escapeText(testMessage)}</p>` : ""}
@@ -300,6 +311,11 @@ export function createBackgroundBadge(onChange: () => void) {
   }
 
   function bind(): void {
+    document.querySelector("#badge-clear-test")?.addEventListener("click", () =>
+      run(async () => {
+        await command({ kind: "clear-for-test" });
+      }),
+    );
     document.querySelector("#badge-foreground")?.addEventListener("click", () => enable(false));
     document.querySelector("#badge-background")?.addEventListener("click", () => enable(true));
     document.querySelector("#badge-disable")?.addEventListener("click", () =>

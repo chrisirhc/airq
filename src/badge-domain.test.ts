@@ -125,6 +125,26 @@ describe("badge calculation and lifetime", () => {
 });
 
 describe("badge ordering and opt-out", () => {
+  it("holds a test-cleared badge across refreshes and target replacement without disabling push", () => {
+    const cleared = applyBadgeCommand(background, { kind: "clear-for-test" });
+    expect(currentDecision(cleared, 2_000)).toEqual({ kind: "clear", reason: "test" });
+    expect(cleared).toMatchObject({
+      mode: "background",
+      target: background.target,
+      snapshot: background.snapshot,
+    });
+    const refreshed = applyBadgeCommand(cleared, { kind: "snapshot", snapshot });
+    const replaced = applyBadgeCommand(refreshed, {
+      kind: "target",
+      target: { kind: "region", region: "west" },
+      snapshot,
+    });
+    expect(currentDecision(replaced, 2_000)).toEqual({ kind: "clear", reason: "test" });
+    expect(replaced).toMatchObject({
+      mode: "background",
+      target: { kind: "region", region: "west" },
+    });
+  });
   it("ignores old deliveries and accepts same-timestamp corrections", () => {
     expect(
       newestSnapshot(snapshot, {

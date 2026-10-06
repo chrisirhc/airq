@@ -65,7 +65,7 @@ export const badgeDecisionSchema = z.discriminatedUnion("kind", [
     ),
   z.object({
     kind: z.literal("clear"),
-    reason: z.enum(["disabled", "expired", "stale", "target-mismatch"]),
+    reason: z.enum(["disabled", "expired", "stale", "target-mismatch", "test"]),
   }),
 ]);
 export type BadgeDecision = z.infer<typeof badgeDecisionSchema>;
@@ -76,12 +76,14 @@ export const badgeStateSchema = z.discriminatedUnion("mode", [
     mode: z.literal("background"),
     target: badgeTargetSchema.nullable(),
     snapshot: regionalSnapshotSchema.nullable(),
+    badgeClearedForTest: z.literal(true).optional(),
   }),
 ]);
 export type BadgeState = z.infer<typeof badgeStateSchema>;
 export const badgeCommandSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("status") }),
   z.object({ kind: z.literal("disable") }),
+  z.object({ kind: z.literal("clear-for-test") }),
   z.object({ kind: z.literal("snapshot"), snapshot: regionalSnapshotSchema.nullable() }),
   z.object({ kind: z.literal("foreground"), decision: badgeDecisionSchema }),
   z.object({
@@ -152,6 +154,7 @@ export function currentDecision(state: BadgeState, now: number): BadgeDecision {
       ? { kind: "clear", reason: "stale" }
       : state.decision;
   if (!state.target) return { kind: "clear", reason: "expired" };
+  if (state.badgeClearedForTest) return { kind: "clear", reason: "test" };
   return state.snapshot
     ? decideBadge(state.snapshot, state.target, now)
     : { kind: "clear", reason: "stale" };
@@ -163,6 +166,8 @@ export function applyBadgeCommand(state: BadgeState, command: BadgeCommand): Bad
       return state;
     case "disable":
       return { mode: "disabled" };
+    case "clear-for-test":
+      return state.mode === "background" ? { ...state, badgeClearedForTest: true } : state;
     case "foreground":
       return { mode: "foreground", decision: command.decision };
     case "snapshot":
@@ -175,6 +180,9 @@ export function applyBadgeCommand(state: BadgeState, command: BadgeCommand): Bad
     case "target":
       return {
         mode: "background",
+        ...(state.mode === "background" && state.badgeClearedForTest
+          ? { badgeClearedForTest: true }
+          : {}),
         target: command.target,
         snapshot: newestSnapshot(
           state.mode === "background" ? state.snapshot : null,
