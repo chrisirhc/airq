@@ -38,7 +38,7 @@ export async function deliverPush(
     stage = "push-network-error";
     const response = await send(subscription.endpoint, {
       ...payload,
-      redirect: "error",
+      redirect: "manual",
       signal: AbortSignal.timeout(6_000),
     });
     if (response.status === 404 || response.status === 410)

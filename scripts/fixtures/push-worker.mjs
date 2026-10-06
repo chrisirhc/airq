@@ -1,7 +1,7 @@
 import { deliverPush } from "../../worker/push-delivery";
 
 export default {
-  async fetch() {
+  async fetch(request) {
     const pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
       "sign",
       "verify",
@@ -29,6 +29,8 @@ export default {
       subject: "mailto:test@example.com",
     };
     let bytes = 0;
+    if (new URL(request.url).pathname === "/network")
+      return Response.json({ result: await deliverPush(subscription, vapid, "test") });
     const result = await deliverPush(subscription, vapid, "test", async (_input, init) => {
       bytes = (await new Response(init.body).arrayBuffer()).byteLength;
       return new Response(null, { status: 403 });
