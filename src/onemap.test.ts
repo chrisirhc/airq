@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createOneMapClient, handleLocation } from "../worker/onemap";
 import { coordinateSchema } from "./domain";
 
@@ -20,6 +20,15 @@ const addresses = {
 };
 
 describe("OneMap location lookup", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
   it("returns the nearest usable label and reuses authentication", async () => {
     const request = vi
       .fn<typeof fetch>()
@@ -112,5 +121,90 @@ describe("OneMap location lookup", () => {
     const unavailable = await handleLocation(request("https://airq.test"), {});
     expect(unavailable.status).toBe(503);
     expect(unavailable.headers.get("Cache-Control")).toBe("no-store");
+    expect(console.error).toHaveBeenCalledExactlyOnceWith({
+      event: "onemap_lookup_failed",
+      status: 503,
+      stage: "configuration",
+      reason: "not-configured",
+      totalDurationMs: expect.any(Number),
+    });
+  });
+
+  it.each([
+    {
+      name: "authentication rejection",
+      stage: "authentication",
+      reason: "http-error",
+      upstreamStatus: 401,
+      reply: () => new Response("test-password", { status: 401 }),
+    },
+    {
+      name: "geocoding rate limit",
+      stage: "reverse-geocoding",
+      reason: "http-error",
+      upstreamStatus: 429,
+      reply: () => new Response("test-token", { status: 429 }),
+    },
+    {
+      name: "invalid authentication payload",
+      stage: "authentication",
+      reason: "invalid-response",
+      upstreamStatus: 200,
+      reply: () => Response.json({ access_token: "test-token", expiry_timestamp: "test-password" }),
+    },
+    {
+      name: "invalid geocoding JSON",
+      stage: "reverse-geocoding",
+      reason: "invalid-response",
+      upstreamStatus: 200,
+      reply: () => new Response("test-password"),
+    },
+    {
+      name: "authentication timeout",
+      stage: "authentication",
+      reason: "timeout",
+      upstreamStatus: null,
+      reply: () => Promise.reject(new DOMException("test-password", "TimeoutError")),
+    },
+    {
+      name: "geocoding network error",
+      stage: "reverse-geocoding",
+      reason: "network-error",
+      upstreamStatus: null,
+      reply: () => Promise.reject(new Error("test-password 1.3254295 103.9005321")),
+    },
+  ])("logs safe diagnostics for $name while returning the generic fallback", async (scenario) => {
+    const upstream = vi.fn<typeof fetch>();
+    if (scenario.stage === "reverse-geocoding") upstream.mockResolvedValueOnce(authResponse());
+    upstream.mockImplementationOnce(async () => scenario.reply());
+    vi.stubGlobal("fetch", upstream);
+    const response = await handleLocation(
+      new Request("https://airq.test/api/location", {
+        method: "POST",
+        headers: { Origin: "https://airq.test", "Content-Type": "application/json" },
+        body: JSON.stringify(coordinate),
+      }),
+      { ...credentials },
+    );
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "Location name unavailable" });
+    expect(console.error).toHaveBeenCalledExactlyOnceWith({
+      event: "onemap_lookup_failed",
+      status: 503,
+      stage: scenario.stage,
+      reason: scenario.reason,
+      ...(scenario.upstreamStatus === null ? {} : { upstreamStatus: scenario.upstreamStatus }),
+      durationMs: expect.any(Number),
+      totalDurationMs: expect.any(Number),
+    });
+    const logged = JSON.stringify(vi.mocked(console.error).mock.calls);
+    for (const sensitive of [
+      "test-password",
+      "test-token",
+      "test@example.com",
+      "1.3254295",
+      "103.9005321",
+    ])
+      expect(logged).not.toContain(sensitive);
   });
 });

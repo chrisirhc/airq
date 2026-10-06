@@ -137,6 +137,12 @@ OneMap publishes a 300-call/minute limit. The app performs one lookup per accept
 
 For local end-to-end use, copy `.dev.vars.example` to `.dev.vars`, fill in your credentials, run `npm run build`, then `npx wrangler dev`. Vite's standalone dev/preview server does not run the Worker, so it uses the generic location label.
 
+### Diagnose location lookup failures
+
+Persistent Workers Logs are enabled with 100% sampling. In Cloudflare, open **Workers & Pages > airq > Observability** and filter for `onemap_lookup_failed`. Each failed lookup records its stage, reason, elapsed time and upstream HTTP status when available. Reasons distinguish timeouts, network errors, invalid responses, upstream HTTP errors and missing configuration. Invocation logs also capture the HTTP response status.
+
+The Worker logs only these diagnostic fields. It does not log coordinates, location names, credentials, tokens, raw error messages or OneMap response bodies. Tracing is disabled to avoid recording outgoing OneMap URLs containing coordinates. A handled HTTP 503 still counts as a successful Worker invocation in the Metrics chart; use Observability to inspect the failure. Enabling logs does not recover earlier events.
+
 ## Data and privacy
 
 The app calls the public PM2.5 and PSI endpoints at `api-open.data.gov.sg`. It stores the location-mode preference and the last successful API responses for an offline error fallback. In location mode, coordinates are sent in a POST body to the AirQ Worker, which forwards them to OneMap to find a nearby building or road name. AirQ does not log, cache, or save the coordinates or location name. OneMap's own data practices apply to its processing. A failed lookup leaves the air-quality estimate usable with the generic "Your location" label.
