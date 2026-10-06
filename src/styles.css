@@ -102,7 +102,7 @@ a {
 
 .hero {
   max-width: 850px;
-  padding: 40px 0 28px;
+  padding: 24px 0 20px;
 }
 
 .eyebrow,
@@ -135,16 +135,16 @@ h1 {
   max-width: 590px;
   margin-bottom: 0;
   color: var(--muted);
-  font-size: clamp(1rem, 2vw, 1.2rem);
+  font-size: 1rem;
   line-height: 1.6;
 }
 
 .controls {
   display: grid;
   grid-template-columns: minmax(190px, 0.8fr) auto minmax(250px, 1fr);
-  gap: 22px;
+  gap: 16px;
   align-items: end;
-  padding: 28px;
+  padding: 20px;
   border: 1px solid var(--line);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.78);
@@ -256,13 +256,14 @@ h1 {
   display: grid;
   grid-template-columns: 1.15fr 0.85fr;
   gap: 20px;
-  padding: 20px 0 88px;
+  align-items: start;
+  padding: 20px 0 28px;
 }
 
 .reading-card {
   position: relative;
-  min-height: 340px;
-  padding: clamp(26px, 4vw, 42px);
+  min-height: 280px;
+  padding: clamp(22px, 3vw, 32px);
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -388,10 +389,22 @@ h1 {
   font-size: 12px;
 }
 
-.contributions h3 {
-  margin: 0 0 10px;
+summary {
+  min-height: 44px;
+  padding: 12px 0;
+  color: var(--ink);
   font-size: 14px;
   font-weight: 700;
+  cursor: pointer;
+}
+
+.contributions {
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+details[open] > summary {
+  margin-bottom: 8px;
 }
 
 .contributions p {
@@ -468,18 +481,19 @@ h1 {
 }
 
 .method-note {
-  display: grid;
-  grid-template-columns: 0.55fr 1.45fr;
-  gap: 32px;
-  padding: 64px 0;
+  padding: 12px 0;
   border-top: 1px solid var(--line);
+}
+
+.method-note > div {
+  padding: 12px 0;
 }
 
 .method-note h2 {
   max-width: 620px;
   margin-bottom: 18px;
   font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-  font-size: clamp(2.2rem, 5vw, 4.3rem);
+  font-size: 1.8rem;
   font-weight: 500;
   line-height: 1;
   letter-spacing: -0.035em;
@@ -523,7 +537,7 @@ footer {
   }
 
   .hero {
-    padding: 32px 4px 24px;
+    padding: 20px 4px 16px;
   }
 
   .controls {
@@ -538,16 +552,15 @@ footer {
 
   .readings {
     grid-template-columns: 1fr;
-    padding-bottom: 62px;
+    padding-bottom: 24px;
   }
 
   .reading-card {
-    min-height: 320px;
+    min-height: 260px;
   }
 
   .method-note {
-    grid-template-columns: 1fr;
-    padding: 48px 4px;
+    padding: 12px 4px;
   }
 
   footer {
@@ -569,8 +582,8 @@ footer {
   }
 }
 .badge-controls {
-  margin-top: 2rem;
-  padding: 1.5rem;
+  margin: 0 0 24px;
+  padding: 1.25rem;
   border: 1px solid var(--line);
   border-radius: 1rem;
   background: var(--paper);
@@ -579,6 +592,13 @@ footer {
   font-size: 1.4rem;
 }
 .page-shell .badge-controls > p {
+  max-width: 75ch;
+  line-height: 1.6;
+}
+.badge-help {
+  margin-bottom: 16px;
+}
+.page-shell .badge-help > p {
   max-width: 75ch;
   line-height: 1.6;
 }

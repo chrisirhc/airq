@@ -57,6 +57,8 @@ let state: AppState = {
   location: { kind: "idle" },
 };
 
+// Preserve disclosure choices through loading and other full-root renders.
+const openDisclosures = new Set<string>();
 let locationRequestId = 0;
 const badge = createBackgroundBadge(render);
 
@@ -192,6 +194,10 @@ function syncBadge(replaceTarget: boolean): void {
 }
 
 function render(): void {
+  for (const disclosure of root.querySelectorAll<HTMLDetailsElement>("details[id]")) {
+    if (disclosure.open) openDisclosures.add(disclosure.id);
+    else openDisclosures.delete(disclosure.id);
+  }
   root.innerHTML = `
     <div class="page-shell">
       <header class="masthead">
@@ -206,8 +212,8 @@ function render(): void {
 
       <section class="hero" aria-labelledby="page-title">
         <p class="eyebrow">Singapore air quality</p>
-        <h1 id="page-title">Know what you are breathing.</h1>
-        <p class="hero-copy">See official regional readings, or use your location for an approximate PM2.5 estimate.</p>
+        <h1 id="page-title">Air quality now.</h1>
+        <p class="hero-copy">1-hour PM2.5 and 24-hour PSI, by region or your location.</p>
       </section>
 
       <section class="controls" aria-label="Location and region controls">
@@ -237,15 +243,15 @@ function render(): void {
 
       ${badge.html()}
 
-      <section class="method-note">
-        <p class="eyebrow">What this means</p>
+      <details class="method-note" id="reading-guidance">
+        <summary>About these readings and estimates</summary>
         <div>
           <h2>Regional data, carefully labeled.</h2>
           <p>NEA reports five broad regions. A location estimate blends their PM2.5 readings by distance. It is an approximation and cannot account for wind, nearby sources, or street-level conditions.</p>
           <p>Estimate algorithm: <a href="${ESTIMATION_METHOD_URL}" target="_blank" rel="noreferrer">Inverse-distance weighting with power 2, explained by Esri <span aria-hidden="true">↗</span></a>.</p>
           <a href="https://www.nea.gov.sg/our-services/pollution-control/air-pollution/faqs" target="_blank" rel="noreferrer">Read NEA guidance <span aria-hidden="true">↗</span></a>
         </div>
-      </section>
+      </details>
 
       <footer class="site-footer">
         <p>Data from the National Environment Agency via data.gov.sg.</p>
@@ -255,6 +261,9 @@ function render(): void {
     </div>
   `;
 
+  for (const disclosure of root.querySelectorAll<HTMLDetailsElement>("details[id]")) {
+    disclosure.open = openDisclosures.has(disclosure.id);
+  }
   bindInteractions();
 }
 
@@ -287,7 +296,7 @@ function renderReadings(): string {
     const band = classifyPm25(value);
     const label = estimated ? "Estimated PM2.5" : `${REGION_LABELS[selectedRegion]} region PM2.5`;
     const detail = estimated
-      ? renderContributions(display.estimate)
+      ? `<p class="card-detail">Approximate 1-hour concentration · not a local measurement</p>${renderContributions(display.estimate)}`
       : `<p class="card-detail">Official 1-hour regional concentration</p>`;
 
     return `
@@ -357,8 +366,9 @@ function renderContributions(estimate: Pm25Estimate): string {
     .join(" + ");
 
   return `
-    <section class="contributions" aria-label="Estimate calculation">
-      <h3>How your estimate is calculated</h3>
+    <details class="contributions" id="estimate-calculation">
+      <summary>How your estimate is calculated</summary>
+      <section aria-label="Estimate calculation">
       <p>${method}</p>
       <div class="contribution-table">
         <table>
@@ -370,7 +380,8 @@ function renderContributions(estimate: Pm25Estimate): string {
       <p class="estimate-equation">${terms} ≈ ${estimate.value.toFixed(2)} µg/m³</p>
       <p>Multiply each regional reading by its weight, then add the results. The headline rounds this to ${Math.round(estimate.value)} µg/m³. Distances and weights above are rounded for display; the calculation uses their full precision.</p>
       <p><a href="${ESTIMATION_METHOD_URL}" target="_blank" rel="noreferrer">Read Esri's explanation of inverse-distance weighting <span aria-hidden="true">↗</span></a>. This estimate uses power 2 with all five regional reference points.</p>
-    </section>
+      </section>
+    </details>
   `;
 }
 

@@ -71,6 +71,27 @@ for (const [value, label, color] of [
   });
 }
 
+test("keeps optional guidance collapsed and preserves disclosure choices", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByText("Central region PM2.5")).toBeVisible();
+  await expect(page.locator("#reading-guidance h2")).toBeHidden();
+  await expect(
+    page.getByText("Foreground-only updates when this app is open.", { exact: false }),
+  ).toBeHidden();
+  await expect(page.getByRole("button", { name: "Enable foreground-only badge" })).toBeVisible();
+  await page.locator("#reading-guidance > summary").click();
+  await expect(page.locator("#reading-guidance h2")).toBeVisible();
+  await page.getByRole("combobox").selectOption("west");
+  await expect(page.locator("#reading-guidance h2")).toBeVisible();
+  await page.locator("#reading-guidance > summary").click();
+  await page.getByRole("combobox").selectOption("central");
+  await expect(page.locator("#reading-guidance h2")).toBeHidden();
+  await page.locator("#badge-help > summary").click();
+  await expect(
+    page.getByText("Foreground-only updates when this app is open.", { exact: false }),
+  ).toBeVisible();
+});
+
 test("keeps stale data warnings neutral and explicit", async ({ page }) => {
   const response = structuredClone(psiResponse);
   response.data.items[0].timestamp = new Date(Date.now() - 60 * 60 * 1000).toISOString();
@@ -174,6 +195,10 @@ test("shows exact regional readings and a location estimate", async ({
     "true",
   );
   const calculation = page.getByRole("region", { name: "Estimate calculation" });
+  await expect(calculation).toBeHidden();
+  const calculationSummary = page.locator("#estimate-calculation > summary");
+  await calculationSummary.focus();
+  await page.keyboard.press("Enter");
   await expect(calculation).toBeVisible();
   await expect(calculation.getByRole("row")).toHaveCount(6);
   await expect(calculation.getByRole("row", { name: "East 30 0.00 100.00%" })).toBeVisible();
@@ -183,6 +208,8 @@ test("shows exact regional readings and a location estimate", async ({
   await expect(
     page.getByText("Location found. Showing an approximate PM2.5 estimate."),
   ).toBeVisible();
+  await calculationSummary.click();
+  await expect(calculation).toBeHidden();
   await page.screenshot({
     path: `test-results/airq-home-${testInfo.project.name}.png`,
     fullPage: true,
@@ -201,6 +228,7 @@ test("refreshes an active estimate when regional values change", async ({ contex
   await page.route("https://api-open.data.gov.sg/v2/real-time/api/psi", (route) => route.abort());
   await page.goto("/");
   await expect(page.getByRole("button", { name: "Using your location" })).toBeVisible();
+  await page.locator("#estimate-calculation > summary").click();
   await expect(page.getByRole("region", { name: "Estimate calculation" })).toContainText(
     "≈ 30.00 µg/m³",
   );
@@ -219,6 +247,7 @@ test("refreshes an active estimate when regional values change", async ({ contex
     }),
   );
   await page.getByRole("button", { name: "Try again" }).click();
+  await expect(page.locator("#estimate-calculation")).toHaveAttribute("open", "");
   await expect(page.getByRole("region", { name: "Estimate calculation" })).toContainText(
     "≈ 35.00 µg/m³",
   );
@@ -232,6 +261,7 @@ test("explains the weighted estimate using all five regional readings", async ({
   await context.setGeolocation({ latitude: 1.32, longitude: 103.88 });
   await page.goto("/");
   await expect(page.getByRole("button", { name: "Using your location" })).toBeVisible();
+  await page.locator("#estimate-calculation > summary").click();
   const calculation = page.getByRole("region", { name: "Estimate calculation" });
   await expect(calculation).toContainText("Each weight is (1 ÷ distance²)");
   await expect(calculation).toContainText("≈ 30.53 µg/m³");
@@ -306,6 +336,8 @@ for (const permission of ["prompt", "unsupported"]) {
       "aria-pressed",
       "true",
     );
+    await expect(page.locator("#estimate-calculation")).not.toHaveAttribute("open", "");
+    await page.locator("#estimate-calculation > summary").click();
     await expect(page.getByRole("region", { name: "Estimate calculation" })).toContainText(
       "≈ 30.53 µg/m³",
     );

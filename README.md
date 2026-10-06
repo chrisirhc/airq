@@ -147,6 +147,8 @@ The Worker logs only these diagnostic fields. It does not log coordinates, locat
 
 Color is reserved for air-quality severity. The interface, controls, and freshness badges are neutral; PSI uses outlined markers in the official Haze.gov.sg colors alongside explicit descriptors. PM2.5 uses an app-defined green/yellow/orange/red marker palette with explicit band numbers and labels; this is not an official NEA color mapping. See [ADR-001: Severity-only color](docs/decisions/001-severity-only-color.md) and [ADR-002: PM2.5 severity colors](docs/decisions/002-pm25-severity-colors.md) for the rationale and reference colors.
 
+Calculations, reading guidance, and badge installation help use collapsed native disclosures to keep repeat visits focused on readings. Values, severity, timestamps, controls, privacy information, and warnings remain visible. Disclosure choices survive in-page refreshes but reset on a new visit. See [ADR-003: Progressive disclosure](docs/decisions/003-progressive-disclosure.md).
+
 ## Data and privacy
 
 The app calls the public PM2.5 and PSI endpoints at `api-open.data.gov.sg`. It stores the location-mode preference and the last successful API responses for an offline error fallback. In location mode, coordinates are sent in a POST body to the AirQ Worker, which forwards them to OneMap to find a nearby building or road name. AirQ does not log, cache, or save the coordinates or location name. OneMap's own data practices apply to its processing. A failed lookup leaves the air-quality estimate usable with the generic "Your location" label.

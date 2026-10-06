@@ -300,11 +300,14 @@ export function createBackgroundBadge(onChange: () => void) {
         : "";
     return `<section class="badge-controls" aria-labelledby="badge-title">
       <p class="eyebrow">Home Screen app</p><h2 id="badge-title">A reading on your app icon.</h2>
+      <details id="badge-help" class="badge-help">
+      <summary>Installation and how badges work</summary>
       <p>On iPhone, use Share → Add to Home Screen, then open AirQ from that icon. The badge is rounded PM2.5 in µg/m³, not a notification count. Zero clears it.</p>
       <p>Foreground-only updates when this app is open. The badge is the last received reading, not live tracking.</p>
       ${debug ? "<p>Background testing saves location-derived weights on this device for up to 24 hours, never coordinates. Every received push shows a visible notification.</p>" : ""}
-      <p>Automatic background updates are not enabled yet.</p>
       ${debug ? "<p>You can send a test after opting in.</p>" : ""}
+      </details>
+      <p>Automatic background updates are not enabled yet.</p>
       <div class="badge-actions">
         <button id="badge-foreground" type="button" ${!supported || !registration || !current || busy ? "disabled" : ""}>${state.mode === "foreground" ? "Foreground badge enabled" : "Enable foreground-only badge"}</button>
         ${debug ? `<button id="badge-background" type="button" ${!supported || !registration || !configured || !current || busy || state.mode === "background" ? "disabled" : ""}>Enable background test and notifications</button>` : ""}

@@ -223,6 +223,7 @@ test("restores location after refresh with a real service worker active", async 
     await navigator.serviceWorker.ready;
   });
   await page.getByRole("button", { name: "Use my location" }).click();
+  await page.locator("#estimate-calculation > summary").click();
   await expect(page.getByRole("region", { name: "Estimate calculation" })).toContainText(
     "≈ 30.53 µg/m³",
   );
@@ -231,6 +232,8 @@ test("restores location after refresh with a real service worker active", async 
     "aria-pressed",
     "true",
   );
+  await expect(page.locator("#estimate-calculation")).not.toHaveAttribute("open", "");
+  await page.locator("#estimate-calculation > summary").click();
   await expect(page.getByRole("region", { name: "Estimate calculation" })).toContainText(
     "≈ 30.53 µg/m³",
   );
