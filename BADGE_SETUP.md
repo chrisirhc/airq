@@ -4,7 +4,7 @@ The implementation covers the [badge design's first gate](BADGE_DESIGN.md). Fore
 
 ## Configure the test backend
 
-The production app works without D1 or VAPID configuration, but its background-test button stays disabled.
+The production app works without D1 or VAPID configuration, but its background-test button stays disabled in debug mode.
 
 1. Authenticate with the account that owns `airq.b65.dev`:
 
@@ -57,6 +57,8 @@ The production app works without D1 or VAPID configuration, but its background-t
    Expect `enabled: true` and `testOnly: true`. The public key is public configuration. The private key is never returned.
 
 ## Test on a physical iPhone
+
+Test enrollment, notification requests, badge-clearing controls, and delivery diagnostics appear only when the app URL includes `?debug`, for example `https://airq.b65.dev/?debug`. The normal installed-app launch URL does not include this flag. The flag changes the UI, not API authorization or an existing push enrollment.
 
 Use iOS 16.4 or later. Browser automation cannot prove native Home Screen icon display, notification permissions, or closed-app delivery.
 

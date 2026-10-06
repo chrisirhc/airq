@@ -21,6 +21,7 @@ const CREDENTIAL_KEY = "airq:push-enrollment:v1";
 type BadgeInput = { target: BadgeTarget; snapshot: RegionalSnapshot };
 
 export function createBackgroundBadge(onChange: () => void) {
+  const debug = new URLSearchParams(window.location.search).has("debug");
   let state: BadgeState = { mode: "disabled" };
   let busy = false;
   let message = "";
@@ -77,14 +78,18 @@ export function createBackgroundBadge(onChange: () => void) {
       });
       registration = await navigator.serviceWorker.ready;
       await command({ kind: "status" });
-      const response = await fetch("/api/badge/config", { signal: AbortSignal.timeout(3_000) });
-      const config = pushConfigSchema.safeParse(await response.json());
-      if (config.success) {
-        configured = config.data.enabled;
-        publicKey = config.data.publicKey;
+      if (debug) {
+        const response = await fetch("/api/badge/config", { signal: AbortSignal.timeout(3_000) });
+        const config = pushConfigSchema.safeParse(await response.json());
+        if (config.success) {
+          configured = config.data.enabled;
+          publicKey = config.data.publicKey;
+        }
       }
     } catch {
-      message = "Background tests are unavailable here. Foreground badges may still work.";
+      message = debug
+        ? "Background tests are unavailable here. Foreground badges may still work."
+        : "Badge settings are unavailable. Reload and try again.";
     }
     onChange();
     void refreshTestStatus();
@@ -117,7 +122,7 @@ export function createBackgroundBadge(onChange: () => void) {
   }
 
   async function refreshTestStatus(): Promise<void> {
-    if (checkingStatus || busy || state.mode !== "background" || document.hidden) return;
+    if (!debug || checkingStatus || busy || state.mode !== "background" || document.hidden) return;
     clearTimeout(statusTimer);
     checkingStatus = true;
     const generation = statusGeneration;
@@ -283,7 +288,9 @@ export function createBackgroundBadge(onChange: () => void) {
       decision.kind === "reading"
         ? `Badge ${decision.rounded} µg/m³, ${label}. Reading at ${new Date(decision.readingAt).toLocaleTimeString("en-SG", { timeZone: "Asia/Singapore" })}.`
         : decision.reason === "test"
-          ? "Badge cleared for test. Push stays enabled. Send a test and close AirQ; check that the number reappears before reopening. A zero reading cannot show a numeric badge."
+          ? debug
+            ? "Badge cleared for test. Push stays enabled. Send a test and close AirQ; check that the number reappears before reopening. A zero reading cannot show a numeric badge."
+            : "Badge temporarily cleared for testing."
           : active
             ? `Badge cleared: ${decision.reason}.`
             : "Badge is off.";
@@ -294,19 +301,21 @@ export function createBackgroundBadge(onChange: () => void) {
     return `<section class="badge-controls" aria-labelledby="badge-title">
       <p class="eyebrow">Home Screen app</p><h2 id="badge-title">A reading on your app icon.</h2>
       <p>On iPhone, use Share → Add to Home Screen, then open AirQ from that icon. The badge is rounded PM2.5 in µg/m³, not a notification count. Zero clears it.</p>
-      <p>Foreground-only updates when this app is open. Background testing saves location-derived weights on this device for up to 24 hours, never coordinates. Every received push shows a visible notification. The badge is the last received reading, not live tracking.</p>
-      <p>Automatic background updates are not enabled yet. You can send a test after opting in.</p>
+      <p>Foreground-only updates when this app is open. The badge is the last received reading, not live tracking.</p>
+      ${debug ? "<p>Background testing saves location-derived weights on this device for up to 24 hours, never coordinates. Every received push shows a visible notification.</p>" : ""}
+      <p>Automatic background updates are not enabled yet.</p>
+      ${debug ? "<p>You can send a test after opting in.</p>" : ""}
       <div class="badge-actions">
         <button id="badge-foreground" type="button" ${!supported || !registration || !current || busy ? "disabled" : ""}>${state.mode === "foreground" ? "Foreground badge enabled" : "Enable foreground-only badge"}</button>
-        <button id="badge-background" type="button" ${!supported || !registration || !configured || !current || busy || state.mode === "background" ? "disabled" : ""}>Enable background test and notifications</button>
+        ${debug ? `<button id="badge-background" type="button" ${!supported || !registration || !configured || !current || busy || state.mode === "background" ? "disabled" : ""}>Enable background test and notifications</button>` : ""}
         ${active || message ? `<button id="badge-disable" type="button" ${busy ? "disabled" : ""}>Disable badge and notifications</button>` : ""}
-        ${state.mode === "background" ? `<button id="badge-test" type="button" ${busy ? "disabled" : ""}>Send test notification</button>` : ""}
-        ${state.mode === "background" ? `<button id="badge-clear-test" type="button" ${busy ? "disabled" : ""}>Clear badge for test</button>` : ""}
+        ${debug && state.mode === "background" ? `<button id="badge-test" type="button" ${busy ? "disabled" : ""}>Send test notification</button>` : ""}
+        ${debug && state.mode === "background" ? `<button id="badge-clear-test" type="button" ${busy ? "disabled" : ""}>Clear badge for test</button>` : ""}
       </div>
       <p role="status" id="badge-status">${busy ? "Updating badge settings…" : escapeText(detail)} ${escapeText(message)}</p>${expiry}
-      ${state.mode === "background" ? `<p role="status" id="badge-test-status">${escapeText(testMessage)}</p>` : ""}
+      ${debug && state.mode === "background" ? `<p role="status" id="badge-test-status">${escapeText(testMessage)}</p>` : ""}
       ${!supported ? "<p>This browser does not expose app badges. Install the app on a supported device to use them.</p>" : ""}
-      ${supported && !configured ? "<p>Background test delivery is not configured on this host.</p>" : ""}
+      ${debug && supported && !configured ? "<p>Background test delivery is not configured on this host.</p>" : ""}
     </section>`;
   }
 

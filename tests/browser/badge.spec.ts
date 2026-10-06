@@ -19,6 +19,7 @@ test("reports rejected test delivery instead of leaving it requested", async ({
             Response.json({ enabled: true, publicKey: "test", testOnly: true }),
           );
         if (url.endsWith("/test")) {
+          if (init?.method === "GET") document.documentElement.dataset.testStatusFetched = "true";
           if (init?.method === "POST") {
             requested = true;
             sessionStorage.setItem("mock-test-requested", "true");
@@ -77,6 +78,15 @@ test("reports rejected test delivery instead of leaving it requested", async ({
     );
   });
   await page.reload();
+  await expect(page.getByRole("button", { name: "Clear badge for test" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Send test notification" })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Enable background test and notifications" }),
+  ).toHaveCount(0);
+  await expect(page.locator("#badge-test-status")).toHaveCount(0);
+  await expect(page.locator("html")).not.toHaveAttribute("data-test-status-fetched", "true");
+  await expect(page.getByRole("button", { name: "Disable badge and notifications" })).toBeVisible();
+  await page.goto("/?debug");
   await page.getByRole("button", { name: "Clear badge for test" }).click();
   await expect(page.locator("#badge-status")).toContainText(
     "Badge cleared for test. Push stays enabled.",
@@ -257,11 +267,7 @@ test("publishes an installable manifest and correctly sized Home Screen icons", 
       ),
     ).toEqual([size, size]);
   }
-  await expect(
-    page.getByText(
-      "Automatic background updates are not enabled yet. You can send a test after opting in.",
-    ),
-  ).toBeVisible();
+  await expect(page.getByText("Automatic background updates are not enabled yet.")).toBeVisible();
 });
 
 test("uses the real service worker for target persistence, ordering, and opt-out", async ({
