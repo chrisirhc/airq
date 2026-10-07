@@ -20,6 +20,7 @@ import {
 import { type ExperimentalPsiEstimate, estimateExperimentalPsi } from "./experimental-psi";
 import { estimatePm25, type Pm25Estimate } from "./location-estimator";
 import { lookupLocationName } from "./location-name";
+import { bindPm25Map, renderPm25Map } from "./pm25-map";
 
 const ESTIMATION_METHOD_URL =
   "https://pro.arcgis.com/en/pro-app/3.5/help/analysis/geostatistical-analyst/how-inverse-distance-weighted-interpolation-works.htm";
@@ -33,6 +34,7 @@ type DisplayMode =
       readonly referenceFingerprint: string;
       readonly capturedAt: number;
       readonly locationName: string | null;
+      readonly coordinate: Coordinate;
     };
 
 type DataState =
@@ -242,6 +244,8 @@ function render(): void {
         ${renderReadings()}
       </section>
 
+      ${state.data.kind === "loaded" && state.data.snapshot.pm25.kind === "available" ? renderPm25Map() : ""}
+
       ${badge.html()}
 
       <details class="method-note" id="reading-guidance">
@@ -265,6 +269,14 @@ function render(): void {
 
   for (const disclosure of root.querySelectorAll<HTMLDetailsElement>("details[id]")) {
     disclosure.open = openDisclosures.has(disclosure.id);
+  }
+  if (state.data.kind === "loaded" && state.data.snapshot.pm25.kind === "available") {
+    bindPm25Map(
+      root,
+      state.data.snapshot.pm25.reading,
+      state.display.kind === "estimated" ? state.display.coordinate : null,
+      state.data.snapshot.pm25.source,
+    );
   }
   bindInteractions();
 }
@@ -548,6 +560,7 @@ function applyPosition(latitude: number, longitude: number): void {
           referenceFingerprint: referenceFingerprint(pm25.references),
           capturedAt: Date.now(),
           locationName: null,
+          coordinate: coordinate.data,
         },
         location: { kind: "idle" },
       };

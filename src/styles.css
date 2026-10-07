@@ -623,3 +623,90 @@ footer {
   outline: 3px solid var(--ink);
   outline-offset: 3px;
 }
+
+.pm25-map {
+  margin: 0 0 24px;
+  padding: 12px 20px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--paper);
+}
+.page-shell .pm25-map p {
+  max-width: 85ch;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.heatmap-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f5f5f5;
+  touch-action: manipulation;
+}
+.heatmap-cell {
+  fill: var(--severity);
+}
+.map-coast {
+  fill: none;
+  stroke: #242424;
+  stroke-width: 1.5;
+}
+.heatmap-chart text {
+  fill: #242424;
+  paint-order: stroke;
+  stroke: white;
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  font-size: 17px;
+  font-weight: 700;
+}
+.map-references circle {
+  fill: #242424;
+  stroke: white;
+  stroke-width: 2px;
+}
+.map-inspection {
+  stroke: #242424;
+  fill: none;
+  stroke-opacity: 0.65;
+}
+.map-location circle {
+  fill: none;
+  stroke: #242424;
+  stroke-width: 3px;
+}
+.heatmap-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  padding: 0;
+  margin: 16px 0;
+  list-style: none;
+  font-size: 12px;
+}
+.heatmap-point h3 {
+  font-size: 18px;
+}
+.heatmap-point table {
+  width: 100%;
+  max-width: 600px;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.heatmap-point caption {
+  text-align: left;
+  margin-bottom: 8px;
+}
+.heatmap-point th,
+.heatmap-point td {
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+}
+.heatmap-point th:first-child {
+  text-align: left;
+}

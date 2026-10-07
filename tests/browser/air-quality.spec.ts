@@ -133,6 +133,60 @@ test("rebuilds the experimental PSI blend when its endpoint recovers", async ({
   await expect(page.locator(".primary-card .reading-value strong")).toHaveText("30");
 });
 
+test("explores the PM2.5 heatmap without changing the selected location", async ({
+  context,
+  page,
+}, testInfo) => {
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({ latitude: 1.35735, longitude: 103.82 });
+  const response = structuredClone(pm25Response);
+  response.data.items[0].readings.pm25_one_hourly = {
+    north: 20,
+    south: 80,
+    east: 180,
+    west: 300,
+    central: 40,
+  };
+  await page.route("https://api-open.data.gov.sg/v2/real-time/api/pm25", (route) =>
+    route.fulfill({ json: response }),
+  );
+  await page.goto("/");
+  await expect(page.getByText("Estimated PM2.5", { exact: true })).toBeVisible();
+  await expect(page.locator(".heatmap-chart svg")).toHaveCount(0);
+  await page.locator("#pm25-map > summary").click();
+  const map = page.getByRole("group", { name: "Interactive modelled PM2.5 heatmap" });
+  await expect(map).toBeVisible();
+  await expect(page.locator(".heatmap-point h3")).toHaveText("Your location estimate: 40.00 µg/m³");
+  await expect(page.locator(".map-references circle")).toHaveCount(5);
+  await expect(page.locator("#pm25-map")).toContainText("not individual monitoring stations");
+  for (const level of [1, 2, 3, 4]) {
+    expect(await page.locator(`.heatmap-cell.pm25-tone-${level}`).count()).toBeGreaterThan(0);
+  }
+  await map.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator(".heatmap-point h3")).toContainText("Inspected estimate:");
+  await expect(page.locator(".primary-card .reading-value strong")).toHaveText("40");
+  await page.locator(".map-references circle").nth(2).click({ force: true });
+  await expect(page.locator(".heatmap-point h3")).toHaveText("Inspected estimate: 180.00 µg/m³");
+  await expect(page.locator(".heatmap-point tbody tr").filter({ hasText: "East" })).toContainText(
+    "100.00%",
+  );
+  await page
+    .locator("#pm25-map")
+    .screenshot({ path: `test-results/airq-heatmap-synthetic-${testInfo.project.name}.png` });
+  await page.getByRole("combobox").selectOption("west");
+  await expect(map).toBeVisible();
+  await expect(page.locator(".map-location")).toHaveCount(0);
+  await expect(page.locator(".heatmap-point h3")).toContainText("Example point estimate:");
+});
+
+test("does not show a heatmap without PM2.5 source data", async ({ page }) => {
+  await page.route("https://api-open.data.gov.sg/v2/real-time/api/pm25", (route) => route.abort());
+  await page.goto("/");
+  await expect(page.getByText("Central region PSI")).toBeVisible();
+  await expect(page.locator("#pm25-map")).toHaveCount(0);
+});
+
 test("keeps optional guidance collapsed and preserves disclosure choices", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("Central region PM2.5")).toBeVisible();

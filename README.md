@@ -149,6 +149,8 @@ Color is reserved for air-quality severity. The interface, controls, and freshne
 
 Calculations, reading guidance, and badge installation help use collapsed native disclosures to keep repeat visits focused on readings. Values, severity, timestamps, controls, privacy information, and warnings remain visible. Disclosure choices survive in-page refreshes but reset on a new visit. See [ADR-003: Progressive disclosure](docs/decisions/003-progressive-disclosure.md).
 
+The expandable PM2.5 map samples the same inverse-distance estimator across a coarse grid and colors cells by the documented PM2.5 bands. Tap a point or use arrow keys to inspect its five regional weights without changing your selected location. It is a model illustration, not measured pollution coverage; reference dots are not individual monitoring stations. The map bundles a simplified Natural Earth outline and makes no tile requests. See [ADR-005: PM2.5 interpolation map](docs/decisions/005-pm25-interpolation-map.md).
+
 ## Data and privacy
 
 The app calls the public PM2.5 and PSI endpoints at `api-open.data.gov.sg`. It stores the location-mode preference and the last successful API responses for an offline error fallback. In location mode, coordinates are sent in a POST body to the AirQ Worker, which forwards them to OneMap to find a nearby building or road name. AirQ does not log, cache, or save the coordinates or location name. OneMap's own data practices apply to its processing. A failed lookup leaves the air-quality estimate usable with the generic "Your location" label.
