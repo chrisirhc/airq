@@ -1,6 +1,6 @@
 # Air around you
 
-A Singapore air-quality site. It shows official regional 1-hour PM2.5 and 24-hour PSI readings from data.gov.sg. With permission, it uses the browser's coordinates to calculate a clearly labeled, distance-weighted PM2.5 estimate. An optional installed-app badge displays the rounded PM2.5 reading.
+A Singapore air-quality site. It shows official regional 1-hour PM2.5 and 24-hour PSI readings from data.gov.sg. With permission, it uses the browser's coordinates to calculate a clearly labeled, distance-weighted PM2.5 estimate and an explicitly experimental blend of regional PSI indices. An optional installed-app badge displays the rounded PM2.5 reading.
 
 ## Run locally
 
@@ -155,4 +155,6 @@ The app calls the public PM2.5 and PSI endpoints at `api-open.data.gov.sg`. It s
 
 Background badge enrollment additionally saves interpolation weights on the device in IndexedDB. They expire after 24 hours and are removed on the next service-worker execution. Weights are location-derived sensitive information; enabling background testing explicitly consents to this storage. For background badge enrollment, the server receives only a Web Push subscription, its encryption keys, and a random revocation token. D1 stores the token hash and enrollment expiry. Revocation credentials remain in browser local storage. Foreground-only mode stores the last badge reading, not coordinates or weights.
 
-Readings older than 45 minutes are marked stale. The estimate uses inverse-square distance weighting over the five reference coordinates supplied by the PM2.5 API. It is not an official local measurement.
+Readings older than 45 minutes are marked stale. The PM2.5 estimate uses inverse-square distance weighting over the five reference coordinates supplied by the PM2.5 API. It is not an official local measurement.
+
+In location mode, **Estimated PSI (experimental)** blends the five regional 24-hour PSI indices using the same location weights. Different pollutants may drive each region's PSI: blending the final indices does not reconstruct an official local PSI and must not be used as a health advisory. The visible warning and approximate descriptor remain outside the collapsed calculation. PSI keeps its own source timestamp and stale/cached status. Select an official region for its exact PSI. See [ADR-004: Experimental PSI blend](docs/decisions/004-experimental-psi-blend.md).

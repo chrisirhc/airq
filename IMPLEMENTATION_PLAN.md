@@ -12,7 +12,7 @@ Distinguish app estimates from official regional readings. NEA does not publish 
 - Show the 24-hour PSI as a secondary value.
 - Label automatic PM2.5 as "Estimated PM2.5" and show its contributing regions and source timestamp.
 - Let the user switch to an official regional reading through the manual selector.
-- Keep 24-hour PSI as an official reading for a named region. Do not average regional PSI values.
+- In manual mode, keep 24-hour PSI as an official reading for a named region. In location mode, show an explicitly experimental regional PSI blend using the PM2.5 distance weights, not an official local PSI or health advisory. This supersedes the original no-averaging decision; see [ADR-004](docs/decisions/004-experimental-psi-blend.md).
 - Support evergreen Chrome, Edge, Firefox, and Safari, including iOS Safari. Test current stable releases and the previous major iOS Safari release. Legacy browsers are out of scope.
 - Keep location processing in the browser. Do not store or send the user's coordinates.
 - Use the current data.gov.sg APIs instead of scraping HTML from haze.gov.sg.
@@ -79,7 +79,7 @@ location weights or manually selected region + normalized readings
 Keep the main logic in framework-independent modules:
 
 - `air-quality-client` fetches and validates both API responses.
-- `location-estimator` calculates distance weights and interpolates PM2.5. It also identifies the closest region for the separately labeled official PSI reading.
+- `location-estimator` calculates distance weights and interpolates PM2.5. `experimental-psi` reuses those weights to blend the five regional PSI indices in location mode, with explicit experimental labeling.
 - `classifiers` maps readings to NEA bands and descriptors.
 - The view requests permission and renders application states.
 
@@ -98,7 +98,7 @@ For the first release:
 5. If a distance is at most one meter, use that region's PM2.5 value directly to avoid division by zero. Otherwise calculate `w_i = (d_min / d_i)^2`, then normalize with `a_i = w_i / sum(w)`. This is equivalent to inverse-square weighting and keeps intermediate weights bounded.
 6. Calculate `estimatedPm25 = sum(a_i * pm25_i)` using readings from the same response item and timestamp. Keep full precision for calculation and classification. Round only for display.
 7. Display "Estimated PM2.5", the source timestamp, and the contributing regions and weights. Keep the manual selector visible. Manual selection displays the API's exact regional values without interpolation.
-8. Show official 24-hour PSI for the closest reference region in a separate card with that region's name. Use a fixed region-key order to resolve equal-distance ties. This is a display fallback, not an official boundary assignment.
+8. Show the experimental PSI blend in a separate card with a visible non-official/non-advisory warning, approximate descriptor, its own timestamp and freshness badge, and an expandable source table. Retain exact official PSI in manual mode. The original closest-region display is superseded by ADR-004.
 
 Require all five finite, nonnegative PM2.5 values and valid reference coordinates for interpolation. If the input is incomplete, show the estimate as unavailable and retain valid official regional readings in manual mode. Do not silently change the weighting method. Handle PM2.5 and PSI timestamps and failures independently.
 
@@ -152,7 +152,7 @@ Exit criteria:
 
 ### 4. Build the reading interface
 
-- Show estimated PM2.5 with its unit, band, contributing regions, weights, and timestamp. Show official regional PSI separately with its region, descriptor, and timestamp.
+- Show estimated PM2.5 with its unit, band, contributing regions, weights, and timestamp. In location mode, show experimental PSI with explicit limitations, approximate descriptor, source values, shared weights, and independent timestamp/freshness. Keep calculation details collapsed initially.
 - In manual mode, show the selected region's exact PM2.5 and PSI values.
 - Use NEA's published thresholds for all labels.
 - Distinguish the two metrics through labels and units, not color alone.
@@ -220,7 +220,7 @@ The release is ready when:
 
 - The app obtains location only after a clear user action.
 - The app shows a clearly labeled distance-weighted PM2.5 estimate and allows manual regional selection.
-- The app displays official regional 24-hour PSI separately, with its region and timestamp.
+- The app displays exact official 24-hour PSI in manual mode and an explicitly experimental, non-advisory PSI blend in location mode, with an independent timestamp and expandable calculation.
 - Manual values match the official API response. Estimates match the documented weighting formula and never appear as official local readings.
 - The app labels stale or cached data and never presents it as current.
 - The app does not store or transmit precise coordinates.

@@ -17,6 +17,7 @@ import {
   REGIONS,
   type Region,
 } from "./domain";
+import { type ExperimentalPsiEstimate, estimateExperimentalPsi } from "./experimental-psi";
 import { estimatePm25, type Pm25Estimate } from "./location-estimator";
 import { lookupLocationName } from "./location-name";
 
@@ -248,6 +249,7 @@ function render(): void {
         <div>
           <h2>Regional data, carefully labeled.</h2>
           <p>NEA reports five broad regions. A location estimate blends their PM2.5 readings by distance. It is an approximation and cannot account for wind, nearby sources, or street-level conditions.</p>
+          <p>In location mode, PSI is an experimental blend of regional indices using the same distance weights. PSI is the highest pollutant sub-index, and different pollutants can drive different regions. Averaging those indices does not reconstruct an official local PSI. Do not use this blend as a health advisory; choose an official region or refer to NEA guidance.</p>
           <p>Estimate algorithm: <a href="${ESTIMATION_METHOD_URL}" target="_blank" rel="noreferrer">Inverse-distance weighting with power 2, explained by Esri <span aria-hidden="true">↗</span></a>.</p>
           <a href="https://www.nea.gov.sg/our-services/pollution-control/air-pollution/faqs" target="_blank" rel="noreferrer">Read NEA guidance <span aria-hidden="true">↗</span></a>
         </div>
@@ -317,21 +319,36 @@ function renderReadings(): string {
 
   const psiCard = (() => {
     if (psi.kind === "unavailable") return renderUnavailable("24-hour PSI", psi.message);
-    const value = psi.reading.values[selectedRegion];
-    const context =
-      state.display.kind === "estimated" ? "Closest reference region" : "Official regional reading";
+    const estimate =
+      state.display.kind === "estimated"
+        ? estimateExperimentalPsi(state.display.estimate.contributions, psi.reading.values)
+        : null;
+    if (state.display.kind === "estimated" && !estimate) {
+      return renderUnavailable(
+        "Estimated PSI (experimental)",
+        "All five valid regional readings and location weights are required. Choose an official region to view its PSI.",
+      );
+    }
+    const value = estimate ? estimate.value : psi.reading.values[selectedRegion];
+    const label = estimate
+      ? "Estimated PSI (experimental)"
+      : `${REGION_LABELS[selectedRegion]} region PSI`;
+    const context = estimate
+      ? "Experimental regional blend · not an official local PSI or health advisory"
+      : "Official regional reading";
 
     return `
       <article class="reading-card ${statusTone(value, "psi")}">
         <div class="card-heading">
           <div>
-            <p class="card-kicker">${REGION_LABELS[selectedRegion]} region PSI</p>
-            <p class="status-label"><span class="severity-marker" aria-hidden="true"></span>${classifyPsi(value)}</p>
+            <p class="card-kicker">${label}</p>
+            <p class="status-label"><span class="severity-marker" aria-hidden="true"></span>${estimate ? "Approximate · " : ""}${classifyPsi(value)}</p>
           </div>
           ${renderSourceBadge(psi.source, psi.reading.stale)}
         </div>
         <div class="reading-value"><strong>${Math.round(value)}</strong><span>24-hour PSI</span></div>
         <p class="card-detail">${context}</p>
+        ${estimate ? renderContributions(estimate, "psi") : ""}
         <p class="timestamp">Reading at ${formatTimestamp(psi.reading.timestamp)}</p>
       </article>
     `;
@@ -340,7 +357,12 @@ function renderReadings(): string {
   return pm25Card + psiCard;
 }
 
-function renderContributions(estimate: Pm25Estimate): string {
+function renderContributions(
+  estimate: Pm25Estimate | ExperimentalPsiEstimate,
+  metric: "pm25" | "psi" = "pm25",
+): string {
+  const isPsi = metric === "psi";
+  const unit = isPsi ? "" : " µg/m³";
   const contributions = estimate.contributions
     .slice()
     .sort((left, right) => right.weight - left.weight);
@@ -366,20 +388,21 @@ function renderContributions(estimate: Pm25Estimate): string {
     .join(" + ");
 
   return `
-    <details class="contributions" id="estimate-calculation">
+    <details class="contributions" id="${isPsi ? "psi-estimate-calculation" : "estimate-calculation"}">
       <summary>How your estimate is calculated</summary>
-      <section aria-label="Estimate calculation">
+      <section aria-label="${isPsi ? "Experimental PSI calculation" : "Estimate calculation"}">
+      ${isPsi ? "<p>This is a weighted blend of the final regional PSI indices, not of pollutant concentrations. Different pollutants may drive each region’s index; the blend is not a scientifically validated local PSI or a health advisory. Select a region for its official PSI.</p>" : ""}
       <p>${method}</p>
       <div class="contribution-table">
         <table>
-          <caption>Official 1-hour PM2.5 readings used in this estimate</caption>
-          <thead><tr><th scope="col">Region</th><th scope="col">PM2.5<br>µg/m³</th><th scope="col">Distance<br>km</th><th scope="col">Weight</th></tr></thead>
+          <caption>Official ${isPsi ? "24-hour PSI" : "1-hour PM2.5"} readings used in this ${isPsi ? "experimental blend" : "estimate"}</caption>
+          <thead><tr><th scope="col">Region</th><th scope="col">${isPsi ? "24-hour PSI" : "PM2.5<br>µg/m³"}</th><th scope="col">Distance<br>km</th><th scope="col">Weight</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
-      <p class="estimate-equation">${terms} ≈ ${estimate.value.toFixed(2)} µg/m³</p>
-      <p>Multiply each regional reading by its weight, then add the results. The headline rounds this to ${Math.round(estimate.value)} µg/m³. Distances and weights above are rounded for display; the calculation uses their full precision.</p>
-      <p><a href="${ESTIMATION_METHOD_URL}" target="_blank" rel="noreferrer">Read Esri's explanation of inverse-distance weighting <span aria-hidden="true">↗</span></a>. This estimate uses power 2 with all five regional reference points.</p>
+      <p class="estimate-equation">${terms} ≈ ${estimate.value.toFixed(2)}${unit}</p>
+      <p>Multiply each regional reading by its weight, then add the results. The headline rounds this to ${Math.round(estimate.value)}${unit}. Distances and weights above are rounded for display; the calculation uses their full precision.</p>
+      <p><a href="${ESTIMATION_METHOD_URL}" target="_blank" rel="noreferrer">Read Esri's explanation of inverse-distance weighting <span aria-hidden="true">↗</span></a>. This ${isPsi ? "experimental blend" : "estimate"} uses power 2 with all five regional reference points.${isPsi ? " This reference explains the weighting method, not the validity of blending PSI indices." : ""}</p>
       </section>
     </details>
   `;

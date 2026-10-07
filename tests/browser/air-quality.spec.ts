@@ -71,6 +71,68 @@ for (const [value, label, color] of [
   });
 }
 
+test("shows an explicitly experimental PSI blend with shared location weights", async ({
+  context,
+  page,
+}) => {
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({ latitude: 1.32, longitude: 103.88 });
+  await page.goto("/");
+  const card = page.locator(".reading-card").filter({ hasText: "Estimated PSI (experimental)" });
+  await expect(card.locator(".reading-value strong")).toHaveText("61");
+  await expect(card.locator("summary")).toHaveText("How your estimate is calculated");
+  await expect(card.locator(".status-label")).toHaveText("Approximate · Moderate");
+  await expect(card.locator(".severity-marker")).toHaveCSS("background-color", "rgb(0, 111, 161)");
+  await expect(card.locator(".card-detail")).toContainText(
+    "not an official local PSI or health advisory",
+  );
+  await expect(page.getByRole("region", { name: "Experimental PSI calculation" })).toBeHidden();
+  await page.locator("#psi-estimate-calculation > summary").click();
+  const calculation = page.getByRole("region", { name: "Experimental PSI calculation" });
+  await expect(calculation).toContainText("≈ 60.53");
+  await expect(calculation).toContainText("Different pollutants may drive");
+  await expect(calculation.getByRole("row")).toHaveCount(6);
+  await page.locator("#estimate-calculation > summary").click();
+  const pm25Weights = await page
+    .locator("#estimate-calculation tbody tr td:last-child")
+    .allTextContents();
+  expect(await calculation.locator("tbody tr td:last-child").allTextContents()).toEqual(
+    pm25Weights,
+  );
+  await page.getByRole("combobox").selectOption("west");
+  await expect(page.getByText("Estimated PSI (experimental)", { exact: true })).toHaveCount(0);
+  const official = page.locator(".reading-card").filter({ hasText: "West region PSI" });
+  await expect(official.locator(".reading-value strong")).toHaveText("70");
+  await expect(official.locator(".status-label")).toHaveText("Moderate");
+  await expect(page.locator("#psi-estimate-calculation")).toHaveCount(0);
+});
+
+test("rebuilds the experimental PSI blend when its endpoint recovers", async ({
+  context,
+  page,
+}) => {
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({ latitude: 1.35735, longitude: 103.94 });
+  await page.route("https://api-open.data.gov.sg/v2/real-time/api/psi", (route) => route.abort());
+  await page.goto("/");
+  await expect(page.getByText("Estimated PM2.5", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+  const response = structuredClone(psiResponse);
+  response.data.items[0].readings.psi_twenty_four_hourly.east = 201;
+  response.data.items[0].timestamp = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  response.data.items[0].updatedTimestamp = response.data.items[0].timestamp;
+  await page.route("https://api-open.data.gov.sg/v2/real-time/api/psi", (route) =>
+    route.fulfill({ json: response }),
+  );
+  await page.getByRole("button", { name: "Try again" }).click();
+  const card = page.locator(".reading-card").filter({ hasText: "Estimated PSI (experimental)" });
+  await expect(card.locator(".reading-value strong")).toHaveText("201");
+  await expect(card.locator(".status-label")).toHaveText("Approximate · Very unhealthy");
+  await expect(card.locator(".data-badge")).toHaveText("Stale");
+  await expect(page.locator(".primary-card .data-badge")).toHaveText("Live data");
+  await expect(page.locator(".primary-card .reading-value strong")).toHaveText("30");
+});
+
 test("keeps optional guidance collapsed and preserves disclosure choices", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("Central region PM2.5")).toBeVisible();
@@ -189,7 +251,13 @@ test("shows exact regional readings and a location estimate", async ({
   await expect(page.locator(".reading-card").filter({ hasText: "Estimated PM2.5" })).toContainText(
     "30",
   );
-  await expect(page.getByText("East region PSI")).toBeVisible();
+  await expect(page.getByText("Estimated PSI (experimental)", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .locator(".reading-card")
+      .filter({ hasText: "Estimated PSI (experimental)" })
+      .locator(".reading-value strong"),
+  ).toHaveText("60");
   await expect(page.getByRole("button", { name: "Using your location" })).toHaveAttribute(
     "aria-pressed",
     "true",
