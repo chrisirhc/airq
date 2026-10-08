@@ -46,5 +46,6 @@ Rejected: the map must demonstrate the same production estimator as the reading 
 
 - Users can explore how proximity changes regional weights without changing their actual selected location or official readings.
 - The coarse raster and simplified outline make this explanatory, not a street-level pollution model or health advisory. Interpolation still ignores wind and local emissions.
+- Cell boundaries align in SVG coordinates, not necessarily in device pixels after responsive scaling. Use `shape-rendering: crispEdges` only on the cells to avoid anti-aliased seams; keep the coastline smooth. Non-scaling strokes preserve influence-line readability on mobile, and zero-weight contributions have no connector.
 - Tests cover projection, sampling the production estimator, uniform/mixed-band fields, lazy rendering, exact-point weights, keyboard/pointer inspection, source freshness, location-marker removal, and unavailable PM2.5 data.
 - The SVG field is bundled/local and can render from the existing cached readings without external map infrastructure.

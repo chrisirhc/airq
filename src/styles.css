@@ -648,8 +648,11 @@ footer {
 }
 .heatmap-cell {
   fill: var(--severity);
+  /* Responsive viewBox scaling makes cell edges fractional on screen. */
+  shape-rendering: crispEdges;
 }
 .map-coast {
+  vector-effect: non-scaling-stroke;
   fill: none;
   stroke: #242424;
   stroke-width: 1.5;
@@ -672,6 +675,11 @@ footer {
   stroke: #242424;
   fill: none;
   stroke-opacity: 0.65;
+}
+.map-inspection line,
+.map-inspection path {
+  /* Keep influence strokes readable at narrow mobile widths. */
+  vector-effect: non-scaling-stroke;
 }
 .map-location circle {
   fill: none;

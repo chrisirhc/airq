@@ -158,6 +158,12 @@ test("explores the PM2.5 heatmap without changing the selected location", async 
   await expect(map).toBeVisible();
   await expect(page.locator(".heatmap-point h3")).toHaveText("Your location estimate: 40.00 µg/m³");
   await expect(page.locator(".map-references circle")).toHaveCount(5);
+  await expect(page.locator(".heatmap-cell").first()).toHaveCSS("shape-rendering", "crispedges");
+  await expect(page.locator(".map-inspection line").first()).toHaveCSS(
+    "vector-effect",
+    "non-scaling-stroke",
+  );
+  await expect(page.locator(".map-inspection line")).toHaveCount(1);
   await expect(page.locator("#pm25-map")).toContainText("not individual monitoring stations");
   for (const level of [1, 2, 3, 4]) {
     expect(await page.locator(`.heatmap-cell.pm25-tone-${level}`).count()).toBeGreaterThan(0);

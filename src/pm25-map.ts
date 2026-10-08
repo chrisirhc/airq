@@ -186,7 +186,7 @@ function inspectionOverlay(
   const lines = estimate.contributions
     .map((item) => {
       const reference = references.find(({ name }) => name === item.region);
-      if (!reference) return "";
+      if (!reference || item.weight === 0) return "";
       const [toX, toY] = projectMapPoint(reference.coordinate);
       return `<line x1="${x}" y1="${y}" x2="${toX}" y2="${toY}" stroke-width="${1 + item.weight * 5}"/>`;
     })
