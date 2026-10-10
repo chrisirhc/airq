@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import { pm25Response, psiResponse } from "./fixtures";
 
 // Playwright request interception cannot reliably route service-worker-controlled pages.
-test.use({ serviceWorkers: "block" });
+test.use({ serviceWorkers: "block", colorScheme: "light" });
 
 test.beforeEach(async ({ page }) => {
   await page.route("**/api/location", (route) =>
@@ -15,6 +15,36 @@ test.beforeEach(async ({ page }) => {
   await page.route("https://api-open.data.gov.sg/v2/real-time/api/psi", (route) =>
     route.fulfill({ json: psiResponse }),
   );
+});
+
+test("follows system appearance changes without reloading or changing readings", async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/");
+  const card = page.locator(".primary-card");
+  const reading = card.locator(".reading-value strong");
+  await expect(reading).toBeVisible();
+  const value = await reading.textContent();
+  await expect(card).toHaveCSS("background-color", "rgb(34, 34, 34)");
+  await expect(card.locator(".status-label")).toHaveCSS("color", "rgb(237, 237, 237)");
+  await expect(card.locator(".severity-marker")).toHaveCSS("background-color", "rgb(71, 155, 2)");
+  await expect(page.locator("#region-select")).toHaveCSS("background-color", "rgb(34, 34, 34)");
+  await expect(page.locator(".location-button")).toHaveCSS("color", "rgb(22, 22, 22)");
+  await page.locator("#pm25-map > summary").click();
+  await expect(page.locator(".heatmap-chart svg")).toHaveCSS("background-color", "rgb(22, 22, 22)");
+
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(card).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(card.locator(".status-label")).toHaveCSS("color", "rgb(36, 36, 36)");
+  await expect(page.locator("#region-select")).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(card.locator(".severity-marker")).toHaveCSS("background-color", "rgb(71, 155, 2)");
+  await expect(reading).toHaveText(value ?? "");
+  await expect(page.locator("#pm25-map")).toHaveAttribute("open", "");
+
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(card).toHaveCSS("background-color", "rgb(34, 34, 34)");
+  await expect(reading).toHaveText(value ?? "");
 });
 
 for (const [value, descriptor, color] of [
