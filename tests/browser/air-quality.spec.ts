@@ -47,6 +47,58 @@ test("follows system appearance changes without reloading or changing readings",
   await expect(reading).toHaveText(value ?? "");
 });
 
+test("cycles saved appearance overrides and can return to the system default", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/");
+  const card = page.locator(".primary-card");
+  const button = page.locator("#theme-button");
+  await expect(button).toHaveText("Theme: System");
+  await button.click();
+  await expect(button).toHaveText("Theme: Light");
+  await expect(card).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute("content", "#f5f5f5");
+  expect(await page.evaluate(() => localStorage.getItem("airq:theme"))).toBe("light");
+  await page.reload();
+  await expect(button).toHaveText("Theme: Light");
+  await expect(card).toHaveCSS("background-color", "rgb(255, 255, 255)");
+
+  await button.focus();
+  await page.keyboard.press("Enter");
+  await expect(button).toHaveText("Theme: Dark");
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(card).toHaveCSS("background-color", "rgb(34, 34, 34)");
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute("content", "#161616");
+  await page.reload();
+  await expect(button).toHaveText("Theme: Dark");
+  await expect(card).toHaveCSS("background-color", "rgb(34, 34, 34)");
+  // A full app render must preserve the override and rebind the control.
+  await page.locator("#region-select").selectOption("west");
+  await expect(button).toHaveText("Theme: Dark");
+  await button.click();
+  await expect(button).toHaveText("Theme: System");
+  expect(await page.evaluate(() => localStorage.getItem("airq:theme"))).toBeNull();
+  await expect(card).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(card).toHaveCSS("background-color", "rgb(34, 34, 34)");
+});
+
+test("keeps appearance controls usable when storage is blocked", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "localStorage", {
+      get() {
+        throw new Error("Storage unavailable");
+      },
+    });
+  });
+  await page.goto("/");
+  const button = page.locator("#theme-button");
+  await expect(button).toHaveText("Theme: System");
+  await button.click();
+  await button.click();
+  await expect(button).toHaveText("Theme: Dark");
+  await expect(page.locator("html")).toHaveCSS("background-color", "rgb(22, 22, 22)");
+});
+
 for (const [value, descriptor, color] of [
   [50, "Good", "rgb(71, 155, 2)"],
   [100, "Moderate", "rgb(0, 111, 161)"],

@@ -2,7 +2,7 @@
 
 A Singapore air-quality site. It shows official regional 1-hour PM2.5 and 24-hour PSI readings from data.gov.sg. With permission, it uses the browser's coordinates to calculate a clearly labeled, distance-weighted PM2.5 estimate and an explicitly experimental blend of regional PSI indices. An optional installed-app badge displays the rounded PM2.5 reading.
 
-The interface automatically follows your system's light or dark appearance, including changes while the page is open. Air-quality severity colors stay the same in both themes.
+The interface defaults to your system's light or dark appearance, including changes while the page is open. The header's **Theme** button cycles through **System → Light → Dark → System**. Light and dark overrides are saved on this device; choosing System clears the override. If browser storage is unavailable, the choice works for the current page only. Air-quality severity colors stay the same in both themes.
 
 ## Run locally
 

@@ -5,37 +5,19 @@
   font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --ink: #242424;
-  --muted: #616161;
-  --paper: #ffffff;
-  --line: rgba(0, 0, 0, 0.16);
-  --canvas: #f5f5f5;
-  --glow: rgba(255, 255, 255, 0.9);
-  --control-surface: rgba(255, 255, 255, 0.78);
-  --control-border: #949494;
-  --button-text: #ffffff;
-  --button-hover: #404040;
-  --active-ring: rgba(0, 0, 0, 0.2);
-  --shadow: rgba(0, 0, 0, 0.06);
-  --skeleton: #e0e0e0;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --ink: #ededed;
-    --muted: #b0b0b0;
-    --paper: #222222;
-    --line: rgba(255, 255, 255, 0.2);
-    --canvas: #161616;
-    --glow: rgba(255, 255, 255, 0.04);
-    --control-surface: rgba(34, 34, 34, 0.9);
-    --control-border: #777777;
-    --button-text: #161616;
-    --button-hover: #cccccc;
-    --active-ring: rgba(255, 255, 255, 0.3);
-    --shadow: rgba(0, 0, 0, 0.25);
-    --skeleton: #383838;
-  }
+  --ink: light-dark(#242424, #ededed);
+  --muted: light-dark(#616161, #b0b0b0);
+  --paper: light-dark(#ffffff, #222222);
+  --line: light-dark(rgba(0, 0, 0, 0.16), rgba(255, 255, 255, 0.2));
+  --canvas: light-dark(#f5f5f5, #161616);
+  --glow: light-dark(rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.04));
+  --control-surface: light-dark(rgba(255, 255, 255, 0.78), rgba(34, 34, 34, 0.9));
+  --control-border: light-dark(#949494, #777777);
+  --button-text: light-dark(#ffffff, #161616);
+  --button-hover: light-dark(#404040, #cccccc);
+  --active-ring: light-dark(rgba(0, 0, 0, 0.2), rgba(255, 255, 255, 0.3));
+  --shadow: light-dark(rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.25));
+  --skeleton: light-dark(#e0e0e0, #383838);
 }
 
 * {
@@ -74,8 +56,33 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 0;
   min-height: 82px;
   border-bottom: 1px solid var(--line);
+}
+
+.masthead-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.theme-button {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  background: var(--paper);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.theme-button:hover {
+  border-color: var(--ink);
 }
 
 .brand {

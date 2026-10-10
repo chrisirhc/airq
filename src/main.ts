@@ -21,6 +21,7 @@ import { type ExperimentalPsiEstimate, estimateExperimentalPsi } from "./experim
 import { estimatePm25, type Pm25Estimate } from "./location-estimator";
 import { lookupLocationName } from "./location-name";
 import { bindPm25Map, renderPm25Map } from "./pm25-map";
+import { bindThemeControl, renderThemeControl } from "./theme";
 
 const ESTIMATION_METHOD_URL =
   "https://pro.arcgis.com/en/pro-app/3.5/help/analysis/geostatistical-analyst/how-inverse-distance-weighted-interpolation-works.htm";
@@ -208,9 +209,12 @@ function render(): void {
           <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
           <span>Air around you</span>
         </a>
-        <a class="source-link" href="https://www.haze.gov.sg/" target="_blank" rel="noreferrer">
-          Official source <span aria-hidden="true">↗</span>
-        </a>
+        <div class="masthead-actions">
+          ${renderThemeControl()}
+          <a class="source-link" href="https://www.haze.gov.sg/" target="_blank" rel="noreferrer">
+            Official source <span aria-hidden="true">↗</span>
+          </a>
+        </div>
       </header>
 
       <section class="hero" aria-labelledby="page-title">
@@ -459,6 +463,7 @@ function manualRegion(): Region {
 
 function bindInteractions(): void {
   badge.bind();
+  bindThemeControl();
   const locationButton = document.querySelector("#location-button");
   locationButton?.addEventListener("click", requestLocation);
 
