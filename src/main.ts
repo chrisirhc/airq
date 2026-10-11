@@ -205,14 +205,14 @@ function render(): void {
   root.innerHTML = `
     <div class="page-shell">
       <header class="masthead">
-        <a class="brand" href="./" aria-label="Air around you home">
+        <a class="brand" href="./" aria-label="Airq home">
           <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-          <span>Air around you</span>
+          <span>Airq</span>
         </a>
         <div class="masthead-actions">
           ${renderThemeControl()}
           <a class="source-link" href="https://www.haze.gov.sg/" target="_blank" rel="noreferrer">
-            Official source <span aria-hidden="true">↗</span>
+            haze.gov.sg <span aria-hidden="true">↗</span>
           </a>
         </div>
       </header>
