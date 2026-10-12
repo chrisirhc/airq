@@ -11,6 +11,8 @@ npm install
 npm run dev
 ```
 
+Use Node.js 20.19+ or 22.12+ (Vite 7's supported versions). `npm ci` installs the exact versions from the lockfile; install dependencies in each workspace rather than sharing `node_modules`.
+
 Browser geolocation works on `localhost`. Production deployments must use HTTPS.
 On page load, the app resumes a previously successful location choice or uses location if permission is already granted.
 It remembers only whether location mode is enabled, and asks the browser for coordinates again after a refresh.
@@ -144,6 +146,14 @@ For local end-to-end use, copy `.dev.vars.example` to `.dev.vars`, fill in your 
 Persistent Workers Logs are enabled with 100% sampling. In Cloudflare, open **Workers & Pages > airq > Observability** and filter for `onemap_lookup_failed`. Each failed lookup records its stage, reason, elapsed time and upstream HTTP status when available. Reasons distinguish timeouts, network errors, invalid responses, upstream HTTP errors and missing configuration. Invocation logs also capture the HTTP response status.
 
 The Worker logs only these diagnostic fields. It does not log coordinates, location names, credentials, tokens, raw error messages or OneMap response bodies. Tracing is disabled to avoid recording outgoing OneMap URLs containing coordinates. A handled HTTP 503 still counts as a successful Worker invocation in the Metrics chart; use Observability to inspect the failure. Enabling logs does not recover earlier events.
+
+## Frontend architecture
+
+The client is a React **19.3.0** application with matching React DOM and TypeScript types, verified as npm's latest stable release on 2026-10-12. Vite 7.3.6, `@vitejs/plugin-react` 5.2.0, and TypeScript 5.9.3 provide automatic JSX and Fast Refresh.
+
+`src/main.tsx` mounts the app in Strict Mode. `src/app.tsx` composes typed components for controls, readings, disclosures, the SVG map, and badges. A per-app browser controller exposes immutable snapshots through `useSyncExternalStore`; React owns rendering and visit-scoped disclosure choices. The existing data/estimator/badge modules and Cloudflare Worker contracts are retained. See [ADR-006: React frontend](docs/decisions/006-react-frontend.md) for lifecycle and tooling decisions.
+
+Useful checks: `npm run typecheck`, `npm run lint`, `npm test` (unit/component tests), `npm run build`, `npm run test:worker`, and `npm run test:browser` (against the production build).
 
 ## Visual design
 

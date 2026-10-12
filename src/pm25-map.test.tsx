@@ -1,14 +1,16 @@
+import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
+import { DisclosureProvider } from "./disclosures";
+import { Pm25Map } from "./pm25-map-view";
+
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
+  true;
+
 import { classifyPm25 } from "./classifiers";
 import { coordinateSchema, pm25Schema, REGIONS } from "./domain";
 import { estimatePm25 } from "./location-estimator";
-import {
-  bindPm25Map,
-  buildHeatmapCells,
-  mapCoordinate,
-  projectMapPoint,
-  renderPm25Map,
-} from "./pm25-map";
+import { buildHeatmapCells, mapCoordinate, projectMapPoint } from "./pm25-map";
 
 const coordinates = [
   [1.41803, 103.82],
@@ -55,10 +57,8 @@ describe("PM2.5 model map", () => {
       values: reading.values,
     });
     if (estimate.kind !== "estimated") throw new Error("Expected estimate");
-    expect(field).toContain(
-      `class="heatmap-cell pm25-tone-${classifyPm25(estimate.estimate.value).level}" x="0" y="0"`,
-    );
-    for (const level of [1, 2, 3, 4]) expect(field).toContain(`pm25-tone-${level}`);
+    expect(field[0]).toEqual({ x: 0, y: 0, band: classifyPm25(estimate.estimate.value).level });
+    for (const level of [1, 2, 3, 4]) expect(field.some((cell) => cell.band === level)).toBe(true);
   });
 
   it("generates a uniform band for identical regional readings", () => {
@@ -70,27 +70,43 @@ describe("PM2.5 model map", () => {
       central: pm25Schema.parse(80),
     };
     const field = buildHeatmapCells({ ...reading, values });
-    expect(field).toContain("pm25-tone-2");
-    expect(field).not.toMatch(/pm25-tone-[134]/);
+    expect(field.length).toBeGreaterThan(0);
+    expect(field.every((cell) => cell.band === 2)).toBe(true);
   });
 
-  it("builds lazily and exposes exact-point weights, cached status, and limitations", () => {
-    const root = document.createElement("div");
-    root.innerHTML = renderPm25Map();
-    const disclosure = root.querySelector<HTMLDetailsElement>("details");
-    if (!disclosure) throw new Error("Missing disclosure");
-    bindPm25Map(root, { ...reading, stale: true }, references[0]?.coordinate ?? null, "cached");
-    expect(root.querySelector("svg")).toBeNull();
-    disclosure.open = true;
-    disclosure.dispatchEvent(new Event("toggle"));
-    expect(root.querySelector("svg")).not.toBeNull();
-    expect(root.querySelector(".heatmap-point")?.textContent).toContain(
-      "Your location estimate: 20.00 µg/m³",
-    );
-    expect(root.querySelector(".heatmap-point")?.textContent).toContain(
-      "Cached source data · Stale",
-    );
-    expect(root.querySelector("tbody tr")?.textContent).toContain("100.00%");
-    expect(root.textContent).toContain("Modelled estimates—not measured coverage");
+  it("builds lazily and exposes exact-point weights, cached status, and limitations", async () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    try {
+      await act(async () =>
+        root.render(
+          <DisclosureProvider>
+            <Pm25Map
+              reading={{ ...reading, stale: true }}
+              location={references[0]?.coordinate ?? null}
+              source="cached"
+            />
+          </DisclosureProvider>,
+        ),
+      );
+      const disclosure = container.querySelector<HTMLDetailsElement>("details");
+      if (!disclosure) throw new Error("Missing disclosure");
+      expect(container.querySelector("svg")).toBeNull();
+      await act(async () => {
+        disclosure.open = true;
+        disclosure.dispatchEvent(new Event("toggle"));
+      });
+      expect(container.querySelector("svg")).not.toBeNull();
+      expect(container.querySelector(".heatmap-point")?.textContent).toContain(
+        "Your location estimate: 20.00 µg/m³",
+      );
+      expect(container.querySelector(".heatmap-point")?.textContent).toContain(
+        "Cached source data · Stale",
+      );
+      expect(container.querySelector("tbody tr")?.textContent).toContain("100.00%");
+      expect(container.textContent).toContain("Modelled estimates—not measured coverage");
+    } finally {
+      await act(async () => root.unmount());
+    }
   });
 });

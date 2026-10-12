@@ -69,7 +69,13 @@ export function createBackgroundBadge(onChange: () => void) {
     }
   }
 
-  async function start(): Promise<void> {
+  let startPromise: Promise<void> | undefined;
+  function start(): Promise<void> {
+    startPromise ??= initialize();
+    return startPromise;
+  }
+
+  async function initialize(): Promise<void> {
     if (!("serviceWorker" in navigator)) return;
     try {
       await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, {
@@ -122,7 +128,15 @@ export function createBackgroundBadge(onChange: () => void) {
   }
 
   async function refreshTestStatus(): Promise<void> {
-    if (!debug || checkingStatus || busy || state.mode !== "background" || document.hidden) return;
+    if (
+      !connected ||
+      !debug ||
+      checkingStatus ||
+      busy ||
+      state.mode !== "background" ||
+      document.hidden
+    )
+      return;
     clearTimeout(statusTimer);
     checkingStatus = true;
     const generation = statusGeneration;
@@ -140,15 +154,28 @@ export function createBackgroundBadge(onChange: () => void) {
           : "Cannot check test delivery. Reopen AirQ to retry.";
     } finally {
       checkingStatus = false;
-      if (generation !== statusGeneration && state.mode === "background")
+      if (connected && generation !== statusGeneration && state.mode === "background")
         statusTimer = setTimeout(() => void refreshTestStatus(), 0);
       onChange();
     }
   }
-  document.addEventListener("visibilitychange", () => {
+  const onVisibilityChange = () => {
     if (!document.hidden) void refreshTestStatus();
-  });
-  window.addEventListener("focus", () => void refreshTestStatus());
+  };
+  const onFocus = () => void refreshTestStatus();
+  let connected = false;
+  function connect(): void {
+    connected = true;
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", onFocus);
+  }
+  function disconnect(): void {
+    connected = false;
+    statusGeneration++;
+    clearTimeout(statusTimer);
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    window.removeEventListener("focus", onFocus);
+  }
 
   async function stopPush(): Promise<void> {
     const subscription = await registration?.pushManager?.getSubscription();
@@ -274,7 +301,7 @@ export function createBackgroundBadge(onChange: () => void) {
       });
   }
 
-  function html(): string {
+  function view() {
     const decision = currentDecision(state, Date.now());
     const active = state.mode !== "disabled";
     const target = state.mode === "background" ? state.target : null;
@@ -296,48 +323,42 @@ export function createBackgroundBadge(onChange: () => void) {
             : "Badge is off.";
     const expiry =
       target?.kind === "estimate"
-        ? `<p>Saved location expires ${new Date(target.expiresAt).toLocaleString("en-SG", { timeZone: "Asia/Singapore" })}. Use your location again to refresh it.</p>`
-        : "";
-    return `<section class="badge-controls" aria-labelledby="badge-title">
-      <p class="eyebrow">Home Screen app</p><h2 id="badge-title">A reading on your app icon.</h2>
-      <details id="badge-help" class="badge-help">
-      <summary>Installation and how badges work</summary>
-      <p>On iPhone, use Share → Add to Home Screen, then open AirQ from that icon. The badge is rounded PM2.5 in µg/m³, not a notification count. Zero clears it.</p>
-      <p>Foreground-only updates when this app is open. The badge is the last received reading, not live tracking.</p>
-      ${debug ? "<p>Background testing saves location-derived weights on this device for up to 24 hours, never coordinates. Every received push shows a visible notification.</p>" : ""}
-      ${debug ? "<p>You can send a test after opting in.</p>" : ""}
-      </details>
-      <p>Automatic background updates are not enabled yet.</p>
-      <div class="badge-actions">
-        <button id="badge-foreground" type="button" ${!supported || !registration || !current || busy ? "disabled" : ""}>${state.mode === "foreground" ? "Foreground badge enabled" : "Enable foreground-only badge"}</button>
-        ${debug ? `<button id="badge-background" type="button" ${!supported || !registration || !configured || !current || busy || state.mode === "background" ? "disabled" : ""}>Enable background test and notifications</button>` : ""}
-        ${active || message ? `<button id="badge-disable" type="button" ${busy ? "disabled" : ""}>Disable badge and notifications</button>` : ""}
-        ${debug && state.mode === "background" ? `<button id="badge-test" type="button" ${busy ? "disabled" : ""}>Send test notification</button>` : ""}
-        ${debug && state.mode === "background" ? `<button id="badge-clear-test" type="button" ${busy ? "disabled" : ""}>Clear badge for test</button>` : ""}
-      </div>
-      <p role="status" id="badge-status">${busy ? "Updating badge settings…" : escapeText(detail)} ${escapeText(message)}</p>${expiry}
-      ${debug && state.mode === "background" ? `<p role="status" id="badge-test-status">${escapeText(testMessage)}</p>` : ""}
-      ${!supported ? "<p>This browser does not expose app badges. Install the app on a supported device to use them.</p>" : ""}
-      ${debug && supported && !configured ? "<p>Background test delivery is not configured on this host.</p>" : ""}
-    </section>`;
+        ? new Date(target.expiresAt).toLocaleString("en-SG", { timeZone: "Asia/Singapore" })
+        : null;
+    return {
+      debug,
+      supported,
+      configured,
+      ready: Boolean(registration && current),
+      busy,
+      active,
+      mode: state.mode,
+      detail,
+      message,
+      testMessage,
+      expiry,
+    };
   }
 
-  function bind(): void {
-    document.querySelector("#badge-clear-test")?.addEventListener("click", () =>
+  return {
+    start,
+    connect,
+    disconnect,
+    view,
+    sync,
+    enableForeground: () => enable(false),
+    enableBackground: () => enable(true),
+    clearForTest: () =>
       run(async () => {
         await command({ kind: "clear-for-test" });
       }),
-    );
-    document.querySelector("#badge-foreground")?.addEventListener("click", () => enable(false));
-    document.querySelector("#badge-background")?.addEventListener("click", () => enable(true));
-    document.querySelector("#badge-disable")?.addEventListener("click", () =>
+    disable: () =>
       run(async () => {
         await command({ kind: "disable" });
         await stopPush();
         message = "Badge cleared and push enrollment removed.";
       }),
-    );
-    document.querySelector("#badge-test")?.addEventListener("click", () =>
+    sendTest: () =>
       run(async () => {
         statusGeneration++;
         clearTimeout(statusTimer);
@@ -345,24 +366,10 @@ export function createBackgroundBadge(onChange: () => void) {
         testMessage = testStatusMessage({ status: "pending" });
         await refreshTestStatus();
       }),
-    );
-  }
-
-  return {
-    start,
-    html,
-    bind,
-    sync,
     savedRegion: () =>
       state.mode === "background" && state.target?.kind === "region" ? state.target.region : null,
   };
 }
 
-function escapeText(text: string): string {
-  return text.replace(
-    /[&<>"']/g,
-    (character) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ??
-      character,
-  );
-}
+export type BackgroundBadge = ReturnType<typeof createBackgroundBadge>;
+export type BadgeView = ReturnType<BackgroundBadge["view"]>;
