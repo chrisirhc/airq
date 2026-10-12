@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { loadAirQuality, parsePm25, parsePsi } from "./air-quality-client";
 
 const now = new Date("2026-10-05T10:00:00+08:00");
@@ -41,6 +41,44 @@ describe("air-quality API parsing", () => {
         45 * 60 * 1000,
       ),
     ).toThrow();
+  });
+
+  it("can read live data when even accessing browser storage throws", async () => {
+    const storage = vi.spyOn(window, "localStorage", "get").mockImplementation(() => {
+      throw new Error("Storage unavailable");
+    });
+    try {
+      const result = await loadAirQuality({
+        fetcher: makeFetcher({ pm25: pm25Response(), psi: psiResponse() }),
+        now: () => now,
+      });
+      expect(result.pm25).toMatchObject({ kind: "available", source: "live" });
+      expect(result.psi).toMatchObject({ kind: "available", source: "live" });
+    } finally {
+      storage.mockRestore();
+    }
+  });
+
+  it("aborts both metric requests without retrying after the owner disconnects", async () => {
+    const controller = new AbortController();
+    const fetcher = vi.fn<typeof fetch>(
+      (_input, options) =>
+        new Promise((_, reject) => {
+          options?.signal?.addEventListener("abort", () => reject(options.signal?.reason), {
+            once: true,
+          });
+        }),
+    );
+    const loading = loadAirQuality({
+      fetcher,
+      signal: controller.signal,
+      storage: new MemoryStorage(),
+    });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    controller.abort();
+    await loading;
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    for (const call of fetcher.mock.calls) expect(call[1]?.signal?.aborted).toBe(true);
   });
 
   it("uses cached PSI only when the live PSI request fails", async () => {

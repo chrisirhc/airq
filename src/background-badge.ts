@@ -79,7 +79,7 @@ export function createBackgroundBadge(onChange: () => void) {
   }
 
   async function start(): Promise<void> {
-    if (!("serviceWorker" in navigator)) return;
+    if (lifetime.signal.aborted || !("serviceWorker" in navigator)) return;
     try {
       await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, {
         type: "module",
@@ -131,6 +131,7 @@ export function createBackgroundBadge(onChange: () => void) {
   }
 
   async function api(path: string, method: string): Promise<Response> {
+    lifetime.signal.throwIfAborted();
     const saved = credential();
     if (!saved) throw new Error("Push enrollment is missing. Disable and enable again.");
     const response = await fetch(`/api/badge/subscriptions/${saved.id}${path}`, {
@@ -198,10 +199,13 @@ export function createBackgroundBadge(onChange: () => void) {
 
   async function stopPush(): Promise<void> {
     const subscription = await registration?.pushManager?.getSubscription();
+    lifetime.signal.throwIfAborted();
     const saved = credential();
     if (saved) await api("", "DELETE");
+    lifetime.signal.throwIfAborted();
     if (subscription && !(await subscription.unsubscribe()))
       throw new Error("Could not unsubscribe. Try disabling again.");
+    lifetime.signal.throwIfAborted();
     localStorage.removeItem(CREDENTIAL_KEY);
     statusGeneration++;
     clearTimeout(statusTimer);
@@ -212,6 +216,7 @@ export function createBackgroundBadge(onChange: () => void) {
     if (!registration || !current)
       throw new Error("Wait for fresh readings before enabling a badge.");
     const existing = await registration.pushManager.getSubscription();
+    lifetime.signal.throwIfAborted();
     const key = Uint8Array.from(
       atob(publicKey.replace(/-/g, "+").replace(/_/g, "/")),
       (character) => character.charCodeAt(0),
@@ -222,6 +227,7 @@ export function createBackgroundBadge(onChange: () => void) {
         userVisibleOnly: true,
         applicationServerKey: key,
       }));
+    lifetime.signal.throwIfAborted();
     const saved = credential();
     const random = crypto.getRandomValues(new Uint8Array(32));
     const token =
@@ -236,6 +242,7 @@ export function createBackgroundBadge(onChange: () => void) {
       ),
       (byte) => byte.toString(16).padStart(2, "0"),
     ).join("");
+    lifetime.signal.throwIfAborted();
     // Save revocation credentials before registration, so a network interruption remains recoverable.
     localStorage.setItem(CREDENTIAL_KEY, JSON.stringify({ id, token }));
     const response = await fetch("/api/badge/subscriptions", {
@@ -271,13 +278,16 @@ export function createBackgroundBadge(onChange: () => void) {
   }
 
   function enable(background: boolean): void {
+    if (lifetime.signal.aborted) return;
     // Safari requires this call in the original click handler, before any awaited setup.
     const permission =
       Notification.permission === "granted"
         ? Promise.resolve("granted")
         : Notification.requestPermission();
     run(async () => {
-      if ((await permission) !== "granted")
+      const granted = await permission;
+      lifetime.signal.throwIfAborted();
+      if (granted !== "granted")
         throw new Error(
           "Notifications permission is required for an iPhone badge. Enable it in Settings to try again.",
         );
@@ -408,7 +418,7 @@ export function createBackgroundBadge(onChange: () => void) {
             break;
         }
       },
-      { signal },
+      { signal: AbortSignal.any([signal, lifetime.signal]) },
     );
   }
 

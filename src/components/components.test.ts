@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pm25Response, psiResponse } from "../../tests/browser/fixtures";
 import { parsePm25, parsePsi } from "../air-quality-client";
 import type { AppState } from "../app-state";
+import { coordinateSchema } from "../domain";
+import { estimatePm25 } from "../location-estimator";
 import { AirqControls } from "./controls";
 import { AirqPm25Map } from "./pm25-map";
 import { AirqReadings } from "./readings";
@@ -87,6 +89,48 @@ describe("custom-element lifecycle", () => {
     expect(readings.querySelector("article")).toBe(card);
     expect(section?.getAttribute("aria-live")).toBe("polite");
     expect(section?.getAttribute("aria-busy")).toBe("false");
+  });
+
+  it("preserves open calculations and summary focus through a local readings update", () => {
+    const coordinate = coordinateSchema.parse({ latitude: 1.35735, longitude: 103.94 });
+    if (loaded.data.kind !== "loaded" || loaded.data.snapshot.pm25.kind !== "available")
+      throw new Error("Missing fixture data");
+    const reading = loaded.data.snapshot.pm25.reading;
+    const result = estimatePm25({
+      coordinate,
+      references: reading.references,
+      values: reading.values,
+    });
+    if (result.kind !== "estimated") throw new Error("Missing fixture estimate");
+    const state: AppState = {
+      ...loaded,
+      display: {
+        kind: "estimated",
+        estimate: result.estimate,
+        referenceFingerprint: "fixture",
+        capturedAt: Date.now(),
+        locationName: null,
+        coordinate,
+      },
+    };
+    if (state.display.kind !== "estimated") throw new Error("Missing estimated display");
+    const readings = new AirqReadings();
+    document.body.append(readings);
+    readings.update(state);
+    const details = readings.querySelector<HTMLDetailsElement>("#estimate-calculation");
+    const summary = details?.querySelector("summary");
+    if (!details || !summary) throw new Error("Missing calculation");
+    details.open = true;
+    summary.focus();
+    readings.update({
+      ...state,
+      display: { ...state.display, estimate: { ...result.estimate, value: 35 } },
+    });
+    expect(readings.querySelector<HTMLDetailsElement>("#estimate-calculation")?.open).toBe(true);
+    expect(document.activeElement).toBe(readings.querySelector("#estimate-calculation > summary"));
+    readings.update({ ...state, data: { kind: "loading" } });
+    readings.update(state);
+    expect(readings.querySelector<HTMLDetailsElement>("#estimate-calculation")?.open).toBe(true);
   });
 
   it("aborts lazy map listeners on disconnect and reconnects without duplicate bindings", () => {

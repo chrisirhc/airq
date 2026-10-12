@@ -159,7 +159,7 @@ The frontend uses native Web Components and TypeScript, with no React or other U
 
 Components use light DOM to retain the shared stylesheet, semantic HTML, accessible labels, and existing design. Controls stay mounted across data changes; local template updates preserve disclosures and corresponding keyboard focus. Disconnecting an app aborts its requests and listeners, invalidates late location callbacks, and stops badge polling without disabling a saved badge enrollment or unregistering the service worker. The PM2.5 map is still lazy and uses the same estimator as the cards.
 
-No dependency changes are needed for this architecture; use `npm ci` for the exact lockfile versions. See [ADR-006: Native custom elements](docs/decisions/006-native-custom-elements.md) for ownership, lifecycle, browser assumptions, and trade-offs. `worker/`, API schemas, and the service-worker build entry are unchanged.
+No dependency changes are needed for this architecture; use `npm ci` for the exact lockfile versions. See [ADR-006: Native custom elements](docs/decisions/006-native-custom-elements.md) for ownership, lifecycle, browser assumptions, and trade-offs, and the [migration validation record](docs/web-components-validation.md) for check results and the local WebKit verification blocker. `worker/`, API schemas, and the service-worker build entry are unchanged.
 
 ## Data and privacy
 

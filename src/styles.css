@@ -31,13 +31,19 @@ body {
   background: radial-gradient(circle at 10% 0%, var(--glow), transparent 34rem), var(--canvas);
 }
 
-/* Light-DOM component hosts do not add boxes to the existing layout. */
+/* Neutral host boxes retain the native semantic children and shared layout. */
 airq-app,
 airq-controls,
 airq-readings,
 airq-pm25-map,
-airq-badge,
-airq-theme,
+airq-badge {
+  display: block;
+}
+
+airq-theme {
+  display: inline-flex;
+}
+
 .location-messages {
   display: contents;
 }
