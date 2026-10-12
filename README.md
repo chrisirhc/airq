@@ -116,7 +116,7 @@ Then run the complete check:
 npm run verify
 ```
 
-The check runs linting, TypeScript, unit tests, the production build, Worker integration tests with isolated local D1 storage, and browser tests against the built app.
+The check runs linting, TypeScript, unit tests, the production build, Worker integration tests with isolated local D1 storage, and browser tests against the built app. Browser tests start their own strict-port preview on `127.0.0.1:4183`; they never reuse an existing server, which could belong to another workspace or serve an old build. If that port is occupied, select an unused one with `AIRQ_TEST_PORT=4184 npm run verify` (or `npm run test:browser`).
 
 To test the built app against the live data.gov.sg endpoints, run:
 
