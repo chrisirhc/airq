@@ -1,7 +1,9 @@
+import elm from "vite-plugin-elm";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   base: "./",
+  plugins: [elm()],
   preview: {
     allowedHosts: ["slateserver.lan", "airq.slt.b65.dev"],
   },
