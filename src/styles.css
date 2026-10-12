@@ -31,6 +31,23 @@ body {
   background: radial-gradient(circle at 10% 0%, var(--glow), transparent 34rem), var(--canvas);
 }
 
+/* Neutral host boxes retain the native semantic children and shared layout. */
+airq-app,
+airq-controls,
+airq-readings,
+airq-pm25-map,
+airq-badge {
+  display: block;
+}
+
+airq-theme {
+  display: inline-flex;
+}
+
+.location-messages {
+  display: contents;
+}
+
 button,
 select {
   font: inherit;

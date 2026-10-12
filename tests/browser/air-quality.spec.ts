@@ -71,7 +71,7 @@ test("cycles saved appearance overrides and can return to the system default", a
   await page.reload();
   await expect(button).toHaveText("Theme: Dark");
   await expect(card).toHaveCSS("background-color", "rgb(34, 34, 34)");
-  // A full app render must preserve the override and rebind the control.
+  // Reading updates must leave the appearance override and control intact.
   await page.locator("#region-select").selectOption("west");
   await expect(button).toHaveText("Theme: Dark");
   await button.click();
@@ -97,6 +97,8 @@ test("keeps appearance controls usable when storage is blocked", async ({ page }
   await button.click();
   await expect(button).toHaveText("Theme: Dark");
   await expect(page.locator("html")).toHaveCSS("background-color", "rgb(22, 22, 22)");
+  await expect(page.getByText("Central region PM2.5")).toBeVisible();
+  await expect(page.getByText("Central region PSI")).toBeVisible();
 });
 
 for (const [value, descriptor, color] of [

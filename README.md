@@ -116,7 +116,7 @@ Then run the complete check:
 npm run verify
 ```
 
-The check runs linting, TypeScript, unit tests, the production build, Worker integration tests with isolated local D1 storage, and browser tests against the built app.
+The check runs linting, TypeScript, unit tests, the production build, Worker integration tests with isolated local D1 storage, and browser tests against the built app. Browser tests start their own strict-port preview on `127.0.0.1:4183`; they never reuse an existing server, which could belong to another workspace or serve an old build. If that port is occupied, select an unused one with `AIRQ_TEST_PORT=4184 npm run verify` (or `npm run test:browser`).
 
 To test the built app against the live data.gov.sg endpoints, run:
 
@@ -152,6 +152,14 @@ Color is reserved for air-quality severity. The interface, controls, and freshne
 Calculations, reading guidance, and badge installation help use collapsed native disclosures to keep repeat visits focused on readings. Values, severity, timestamps, controls, privacy information, and warnings remain visible. Disclosure choices survive in-page refreshes but reset on a new visit. See [ADR-003: Progressive disclosure](docs/decisions/003-progressive-disclosure.md).
 
 The expandable PM2.5 map samples the same inverse-distance estimator across a coarse grid and colors cells by the documented PM2.5 bands. Tap a point or use arrow keys to inspect its five regional weights without changing your selected location. It is a model illustration, not measured pollution coverage; reference dots are not individual monitoring stations. The map bundles a simplified Natural Earth outline and makes no tile requests. See [ADR-005: PM2.5 interpolation map](docs/decisions/005-pm25-interpolation-map.md).
+
+## Frontend architecture
+
+The frontend uses native Web Components and TypeScript, with no React or other UI-framework runtime. `src/main.ts` registers the elements; `<airq-app>` mounts the static shell and owns a connection-scoped controller in `src/app-state.ts`. The controller coordinates readings, location lookup, and badge synchronization. Presentation lives in `src/components/`, with typed state updates and bubbling intent events from native controls.
+
+Components use light DOM to retain the shared stylesheet, semantic HTML, accessible labels, and existing design. Controls stay mounted across data changes; local template updates preserve disclosures and corresponding keyboard focus. Disconnecting an app aborts its requests and listeners, invalidates late location callbacks, and stops badge polling without disabling a saved badge enrollment or unregistering the service worker. The PM2.5 map is still lazy and uses the same estimator as the cards.
+
+No dependency changes are needed for this architecture; use `npm ci` for the exact lockfile versions. See [ADR-006: Native custom elements](docs/decisions/006-native-custom-elements.md) for ownership, lifecycle, browser assumptions, and trade-offs, and the [migration validation record](docs/web-components-validation.md) for check results and the local WebKit verification blocker. `worker/`, API schemas, and the service-worker build entry are unchanged.
 
 ## Data and privacy
 
