@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { classifyPm25 } from "./classifiers";
 import { Disclosure } from "./disclosures";
 import { type Coordinate, coordinateSchema, REGION_LABELS, type ReadingSource } from "./domain";
@@ -47,14 +47,7 @@ export function Pm25Map(props: {
             regional reference points, not individual monitoring stations. Inspecting the map does
             not change your selected location.
           </p>
-          {open ? (
-            <MapInspection key={key} {...props} />
-          ) : (
-            <>
-              <div className="heatmap-chart" />
-              <MapLegend />
-            </>
-          )}
+          <LazyMapInspection key={key} open={open} {...props} />
           <p className="map-attribution">
             Simplified land outline:{" "}
             <a
@@ -74,6 +67,30 @@ export function Pm25Map(props: {
         </>
       )}
     </Disclosure>
+  );
+}
+
+function LazyMapInspection({
+  open,
+  ...props
+}: {
+  open: boolean;
+  reading: MapReading;
+  location: Coordinate | null;
+  source: ReadingSource;
+}) {
+  const [initialized, setInitialized] = useState(open);
+  useEffect(() => {
+    if (open) setInitialized(true);
+  }, [open]);
+  // Native details hides the mounted chart; reopening preserves inspection and SVG nodes.
+  return initialized || open ? (
+    <MapInspection {...props} />
+  ) : (
+    <>
+      <div className="heatmap-chart" />
+      <MapLegend />
+    </>
   );
 }
 

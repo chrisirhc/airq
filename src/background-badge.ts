@@ -283,7 +283,7 @@ export function createBackgroundBadge(onChange: () => void) {
     }
     pendingSync = pendingSync
       .then(async () => {
-        if (busy || !registration || state.mode === "disabled") return;
+        if (!connected || busy || !registration || state.mode === "disabled") return;
         if (state.mode === "foreground") {
           await command({
             kind: "foreground",

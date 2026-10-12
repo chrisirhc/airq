@@ -1,17 +1,20 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const port = Number(process.env.PLAYWRIGHT_PORT ?? 4175);
+
 export default defineConfig({
   testDir: "./tests/browser",
   fullyParallel: true,
   workers: 2,
   use: {
-    baseURL: "http://127.0.0.1:4173",
+    baseURL: `http://127.0.0.1:${port}`,
     trace: "retain-on-failure",
   },
   webServer: {
-    command: "npm run preview -- --host 127.0.0.1",
-    port: 4173,
-    reuseExistingServer: !process.env.CI,
+    command: `npm run preview -- --host 127.0.0.1 --port ${port} --strictPort`,
+    port,
+    // Never silently test another workspace's preview server.
+    reuseExistingServer: false,
   },
   projects: [
     {

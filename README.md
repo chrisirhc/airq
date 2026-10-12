@@ -118,7 +118,9 @@ Then run the complete check:
 npm run verify
 ```
 
-The check runs linting, TypeScript, unit tests, the production build, Worker integration tests with isolated local D1 storage, and browser tests against the built app.
+The check runs linting, TypeScript, unit/component tests, the production build, Worker integration tests with isolated local D1 storage, and browser tests against the built app.
+
+Browser tests start this workspace's preview on port **4175** with `--strictPort` and never reuse an existing server. If that port is occupied, choose a free one with `PLAYWRIGHT_PORT=4176 npm run test:browser`. This prevents accidentally testing another workspace's build. See [migration verification notes](docs/react-migration-verification.md) for the recorded checks and remaining caveats.
 
 To test the built app against the live data.gov.sg endpoints, run:
 

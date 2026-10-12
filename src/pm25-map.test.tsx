@@ -105,6 +105,24 @@ describe("PM2.5 model map", () => {
       );
       expect(container.querySelector("tbody tr")?.textContent).toContain("100.00%");
       expect(container.textContent).toContain("Modelled estimates—not measured coverage");
+      const svg = container.querySelector("svg");
+      if (!svg) throw new Error("Missing map");
+      await act(async () =>
+        svg.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })),
+      );
+      const inspected = container.querySelector(".heatmap-point h3")?.textContent;
+      expect(inspected).toContain("Inspected estimate:");
+      await act(async () => {
+        disclosure.open = false;
+        disclosure.dispatchEvent(new Event("toggle"));
+      });
+      expect(container.querySelector("svg")).toBe(svg);
+      await act(async () => {
+        disclosure.open = true;
+        disclosure.dispatchEvent(new Event("toggle"));
+      });
+      expect(container.querySelector("svg")).toBe(svg);
+      expect(container.querySelector(".heatmap-point h3")?.textContent).toBe(inspected);
     } finally {
       await act(async () => root.unmount());
     }
