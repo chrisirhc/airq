@@ -21,6 +21,10 @@ const CREDENTIAL_KEY = "airq:push-enrollment:v1";
 type BadgeInput = { target: BadgeTarget; snapshot: RegionalSnapshot };
 
 export function createBackgroundBadge(onChange: () => void) {
+  const lifetime = new AbortController();
+  const notify = () => {
+    if (!lifetime.signal.aborted) onChange();
+  };
   const debug = new URLSearchParams(window.location.search).has("debug");
   let state: BadgeState = { mode: "disabled" };
   let busy = false;
@@ -39,18 +43,21 @@ export function createBackgroundBadge(onChange: () => void) {
     "serviceWorker" in navigator && "setAppBadge" in navigator && "Notification" in window;
 
   async function command(input: BadgeCommand): Promise<void> {
+    lifetime.signal.throwIfAborted();
     const worker = registration?.active;
     if (!worker) throw new Error("The badge service worker is not ready. Reload and try again.");
     const channel = new MessageChannel();
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let cancel: (() => void) | undefined;
     try {
       const result: unknown = await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error("Badge update timed out")), 5_000);
-        channel.port1.onmessage = (event: MessageEvent<unknown>) => {
-          clearTimeout(timeout);
-          resolve(event.data);
-        };
+        timeout = setTimeout(() => reject(new Error("Badge update timed out")), 5_000);
+        cancel = () => reject(lifetime.signal.reason);
+        lifetime.signal.addEventListener("abort", cancel, { once: true });
+        channel.port1.onmessage = (event: MessageEvent<unknown>) => resolve(event.data);
         worker.postMessage(input, [channel.port2]);
       });
+      lifetime.signal.throwIfAborted();
       const parsed = responseSchema.safeParse(result);
       if (!parsed.success) {
         const failure = z.object({ error: z.string() }).safeParse(result);
@@ -64,6 +71,8 @@ export function createBackgroundBadge(onChange: () => void) {
       }
       state = parsed.data.state;
     } finally {
+      clearTimeout(timeout);
+      if (cancel) lifetime.signal.removeEventListener("abort", cancel);
       channel.port1.close();
       channel.port2.close();
     }
@@ -76,10 +85,11 @@ export function createBackgroundBadge(onChange: () => void) {
         type: "module",
         scope: import.meta.env.BASE_URL,
       });
-      registration = await navigator.serviceWorker.ready;
+      lifetime.signal.throwIfAborted();
+      registration = await whileConnected(navigator.serviceWorker.ready);
       await command({ kind: "status" });
       if (debug) {
-        const response = await fetch("/api/badge/config", { signal: AbortSignal.timeout(3_000) });
+        const response = await fetch("/api/badge/config", { signal: requestSignal(3_000) });
         const config = pushConfigSchema.safeParse(await response.json());
         if (config.success) {
           configured = config.data.enabled;
@@ -91,8 +101,28 @@ export function createBackgroundBadge(onChange: () => void) {
         ? "Background tests are unavailable here. Foreground badges may still work."
         : "Badge settings are unavailable. Reload and try again.";
     }
-    onChange();
+    notify();
     void refreshTestStatus();
+  }
+
+  function requestSignal(timeout: number): AbortSignal {
+    return AbortSignal.any([lifetime.signal, AbortSignal.timeout(timeout)]);
+  }
+
+  async function whileConnected<T>(promise: Promise<T>): Promise<T> {
+    lifetime.signal.throwIfAborted();
+    let cancel: (() => void) | undefined;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise<never>((_, reject) => {
+          cancel = () => reject(lifetime.signal.reason);
+          lifetime.signal.addEventListener("abort", cancel, { once: true });
+        }),
+      ]);
+    } finally {
+      if (cancel) lifetime.signal.removeEventListener("abort", cancel);
+    }
   }
 
   function credential() {
@@ -105,7 +135,7 @@ export function createBackgroundBadge(onChange: () => void) {
     if (!saved) throw new Error("Push enrollment is missing. Disable and enable again.");
     const response = await fetch(`/api/badge/subscriptions/${saved.id}${path}`, {
       method,
-      signal: AbortSignal.timeout(8_000),
+      signal: requestSignal(8_000),
       headers: { Authorization: `Bearer ${saved.token}` },
     });
     if (!response.ok) {
@@ -122,7 +152,15 @@ export function createBackgroundBadge(onChange: () => void) {
   }
 
   async function refreshTestStatus(): Promise<void> {
-    if (!debug || checkingStatus || busy || state.mode !== "background" || document.hidden) return;
+    if (
+      lifetime.signal.aborted ||
+      !debug ||
+      checkingStatus ||
+      busy ||
+      state.mode !== "background" ||
+      document.hidden
+    )
+      return;
     clearTimeout(statusTimer);
     checkingStatus = true;
     const generation = statusGeneration;
@@ -140,15 +178,23 @@ export function createBackgroundBadge(onChange: () => void) {
           : "Cannot check test delivery. Reopen AirQ to retry.";
     } finally {
       checkingStatus = false;
-      if (generation !== statusGeneration && state.mode === "background")
+      if (
+        !lifetime.signal.aborted &&
+        generation !== statusGeneration &&
+        state.mode === "background"
+      )
         statusTimer = setTimeout(() => void refreshTestStatus(), 0);
-      onChange();
+      notify();
     }
   }
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) void refreshTestStatus();
-  });
-  window.addEventListener("focus", () => void refreshTestStatus());
+  document.addEventListener(
+    "visibilitychange",
+    () => {
+      if (!document.hidden) void refreshTestStatus();
+    },
+    { signal: lifetime.signal },
+  );
+  window.addEventListener("focus", () => void refreshTestStatus(), { signal: lifetime.signal });
 
   async function stopPush(): Promise<void> {
     const subscription = await registration?.pushManager?.getSubscription();
@@ -196,6 +242,7 @@ export function createBackgroundBadge(onChange: () => void) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ subscription: subscription.toJSON(), token }),
+      signal: requestSignal(8_000),
     });
     if (!response.ok)
       throw new Error("Push enrollment failed. Disable to clean up, then try again.");
@@ -204,19 +251,21 @@ export function createBackgroundBadge(onChange: () => void) {
   }
 
   function run(operation: () => Promise<void>): void {
+    if (lifetime.signal.aborted) return;
     busy = true;
     message = "";
-    onChange();
+    notify();
     void operation()
       .catch((error: unknown) => {
         message = error instanceof Error ? error.message : "Badge operation failed";
       })
       .finally(() => {
+        if (lifetime.signal.aborted) return;
         busy = false;
         const replaceTarget = targetChangedWhileBusy;
         targetChangedWhileBusy = false;
         sync(current, replaceTarget);
-        onChange();
+        notify();
         void refreshTestStatus();
       });
   }
@@ -249,14 +298,16 @@ export function createBackgroundBadge(onChange: () => void) {
   }
 
   function sync(input: BadgeInput | null, replaceTarget: boolean): void {
+    if (lifetime.signal.aborted) return;
     current = input;
+    notify();
     if (busy) {
       targetChangedWhileBusy ||= replaceTarget;
       return;
     }
     pendingSync = pendingSync
       .then(async () => {
-        if (busy || !registration || state.mode === "disabled") return;
+        if (lifetime.signal.aborted || busy || !registration || state.mode === "disabled") return;
         if (state.mode === "foreground") {
           await command({
             kind: "foreground",
@@ -266,11 +317,12 @@ export function createBackgroundBadge(onChange: () => void) {
           });
         } else if (replaceTarget && input) await command({ kind: "target", ...input });
         else await command({ kind: "snapshot", snapshot: input?.snapshot ?? null });
-        onChange();
+        notify();
       })
       .catch(() => {
+        if (lifetime.signal.aborted) return;
         message = "The badge could not be updated. Open the installed app and try again.";
-        onChange();
+        notify();
       });
   }
 
@@ -322,29 +374,41 @@ export function createBackgroundBadge(onChange: () => void) {
     </section>`;
   }
 
-  function bind(): void {
-    document.querySelector("#badge-clear-test")?.addEventListener("click", () =>
-      run(async () => {
-        await command({ kind: "clear-for-test" });
-      }),
-    );
-    document.querySelector("#badge-foreground")?.addEventListener("click", () => enable(false));
-    document.querySelector("#badge-background")?.addEventListener("click", () => enable(true));
-    document.querySelector("#badge-disable")?.addEventListener("click", () =>
-      run(async () => {
-        await command({ kind: "disable" });
-        await stopPush();
-        message = "Badge cleared and push enrollment removed.";
-      }),
-    );
-    document.querySelector("#badge-test")?.addEventListener("click", () =>
-      run(async () => {
-        statusGeneration++;
-        clearTimeout(statusTimer);
-        await api("/test", "POST");
-        testMessage = testStatusMessage({ status: "pending" });
-        await refreshTestStatus();
-      }),
+  function bind(root: HTMLElement, signal: AbortSignal): void {
+    root.addEventListener(
+      "click",
+      (event) => {
+        const button = event.target instanceof Element ? event.target.closest("button") : null;
+        if (!button || button.disabled) return;
+        switch (button.id) {
+          case "badge-foreground":
+            enable(false);
+            break;
+          case "badge-background":
+            enable(true);
+            break;
+          case "badge-clear-test":
+            run(() => command({ kind: "clear-for-test" }));
+            break;
+          case "badge-disable":
+            run(async () => {
+              await command({ kind: "disable" });
+              await stopPush();
+              message = "Badge cleared and push enrollment removed.";
+            });
+            break;
+          case "badge-test":
+            run(async () => {
+              statusGeneration++;
+              clearTimeout(statusTimer);
+              await api("/test", "POST");
+              testMessage = testStatusMessage({ status: "pending" });
+              await refreshTestStatus();
+            });
+            break;
+        }
+      },
+      { signal },
     );
   }
 
@@ -353,6 +417,11 @@ export function createBackgroundBadge(onChange: () => void) {
     html,
     bind,
     sync,
+    dispose() {
+      lifetime.abort();
+      statusGeneration++;
+      clearTimeout(statusTimer);
+    },
     savedRegion: () =>
       state.mode === "background" && state.target?.kind === "region" ? state.target.region : null,
   };

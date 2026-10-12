@@ -76,6 +76,7 @@ export function bindPm25Map(
   reading: MapReading,
   location: Coordinate | null,
   source: ReadingSource,
+  signal?: AbortSignal,
 ): void {
   const disclosure = root.querySelector<HTMLDetailsElement>("#pm25-map");
   if (!disclosure) return;
@@ -137,38 +138,46 @@ export function bindPm25Map(
       <text x="${WIDTH - 25}" y="30" text-anchor="end">N ↑</text>
     </svg>`;
     const svg = chart.querySelector("svg");
-    svg?.addEventListener("click", (event) => {
-      const region =
-        event.target instanceof Element
-          ? event.target.closest("[data-region]")?.getAttribute("data-region")
-          : null;
-      const reference = reading.references.find(({ name }) => name === region);
-      if (reference) {
-        inspect(reference.coordinate, "Inspected estimate");
-        return;
-      }
-      const matrix = svg.getScreenCTM();
-      if (!matrix) return;
-      const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
-      inspect(mapCoordinate(point.x, point.y), "Inspected estimate");
-    });
-    svg?.addEventListener("keydown", (event) => {
-      const movement: Record<string, readonly [number, number]> = {
-        ArrowLeft: [-CELL, 0],
-        ArrowRight: [CELL, 0],
-        ArrowUp: [0, -CELL],
-        ArrowDown: [0, CELL],
-      };
-      const delta = movement[event.key];
-      if (!delta) return;
-      event.preventDefault();
-      const [x, y] = projectMapPoint(inspected);
-      inspect(mapCoordinate(x + delta[0], y + delta[1]), "Inspected estimate");
-    });
+    svg?.addEventListener(
+      "click",
+      (event) => {
+        const region =
+          event.target instanceof Element
+            ? event.target.closest("[data-region]")?.getAttribute("data-region")
+            : null;
+        const reference = reading.references.find(({ name }) => name === region);
+        if (reference) {
+          inspect(reference.coordinate, "Inspected estimate");
+          return;
+        }
+        const matrix = svg.getScreenCTM();
+        if (!matrix) return;
+        const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
+        inspect(mapCoordinate(point.x, point.y), "Inspected estimate");
+      },
+      { signal },
+    );
+    svg?.addEventListener(
+      "keydown",
+      (event) => {
+        const movement: Record<string, readonly [number, number]> = {
+          ArrowLeft: [-CELL, 0],
+          ArrowRight: [CELL, 0],
+          ArrowUp: [0, -CELL],
+          ArrowDown: [0, CELL],
+        };
+        const delta = movement[event.key];
+        if (!delta) return;
+        event.preventDefault();
+        const [x, y] = projectMapPoint(inspected);
+        inspect(mapCoordinate(x + delta[0], y + delta[1]), "Inspected estimate");
+      },
+      { signal },
+    );
     inspect(inspected, location ? "Your location estimate" : "Example point estimate");
   }
 
-  disclosure.addEventListener("toggle", initialize);
+  disclosure.addEventListener("toggle", initialize, { signal });
   initialize();
 }
 

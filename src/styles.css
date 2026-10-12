@@ -31,6 +31,17 @@ body {
   background: radial-gradient(circle at 10% 0%, var(--glow), transparent 34rem), var(--canvas);
 }
 
+/* Light-DOM component hosts do not add boxes to the existing layout. */
+airq-app,
+airq-controls,
+airq-readings,
+airq-pm25-map,
+airq-badge,
+airq-theme,
+.location-messages {
+  display: contents;
+}
+
 button,
 select {
   font: inherit;

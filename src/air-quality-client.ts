@@ -16,13 +16,14 @@ export interface AirQualityClientOptions {
   readonly storage?: Storage;
   readonly now?: () => Date;
   readonly staleAfterMs?: number;
+  readonly signal?: AbortSignal;
 }
 
 export async function loadAirQuality(
   options: AirQualityClientOptions = {},
 ): Promise<AirQualitySnapshot> {
   const fetcher = options.fetcher ?? fetch;
-  const storage = options.storage ?? window.localStorage;
+  const storage = options.storage ?? availableStorage();
   const now = options.now ?? (() => new Date());
   const staleAfterMs = options.staleAfterMs ?? DEFAULT_STALE_AFTER_MS;
 
@@ -32,6 +33,7 @@ export async function loadAirQuality(
       cacheKey: PM25_CACHE_KEY,
       fetcher,
       storage,
+      signal: options.signal,
       parse: (value) => parsePm25(value, now(), staleAfterMs),
     }),
     loadMetric({
@@ -39,6 +41,7 @@ export async function loadAirQuality(
       cacheKey: PSI_CACHE_KEY,
       fetcher,
       storage,
+      signal: options.signal,
       parse: (value) => parsePsi(value, now(), staleAfterMs),
     }),
   ]);
@@ -51,16 +54,19 @@ async function loadMetric<T>({
   cacheKey,
   fetcher,
   storage,
+  signal,
   parse,
 }: {
   readonly url: string;
   readonly cacheKey: string;
   readonly fetcher: typeof fetch;
-  readonly storage: Storage;
+  readonly storage: Storage | undefined;
+  readonly signal: AbortSignal | undefined;
   readonly parse: (value: unknown) => T;
 }): Promise<MetricResult<T>> {
   try {
-    const raw = await fetchJsonWithRetry(url, fetcher);
+    const raw = await fetchJsonWithRetry(url, fetcher, signal);
+    signal?.throwIfAborted();
     const reading = parse(raw);
     safelyWrite(storage, cacheKey, raw);
     return { kind: "available", source: "live", reading };
@@ -78,13 +84,20 @@ async function loadMetric<T>({
   }
 }
 
-async function fetchJsonWithRetry(url: string, fetcher: typeof fetch): Promise<unknown> {
+async function fetchJsonWithRetry(
+  url: string,
+  fetcher: typeof fetch,
+  signal?: AbortSignal,
+): Promise<unknown> {
   let latestError: unknown;
   for (let attempt = 0; attempt < 2; attempt += 1) {
+    signal?.throwIfAborted();
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
-      const response = await fetcher(url, { signal: controller.signal });
+      const response = await fetcher(url, {
+        signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
+      });
       if (!response.ok) throw new Error(`Request failed with status ${response.status}.`);
       return await response.json();
     } catch (error) {
@@ -96,26 +109,34 @@ async function fetchJsonWithRetry(url: string, fetcher: typeof fetch): Promise<u
   throw latestError;
 }
 
-function safelyWrite(storage: Storage, key: string, value: unknown): void {
+function availableStorage(): Storage | undefined {
   try {
-    storage.setItem(key, JSON.stringify(value));
-  } catch {
-    // Reading live data remains useful when private browsing or storage limits block caching.
-  }
-}
-
-function safelyRead(storage: Storage, key: string): unknown | undefined {
-  try {
-    const value = storage.getItem(key);
-    return value === null ? undefined : JSON.parse(value);
+    return window.localStorage;
   } catch {
     return undefined;
   }
 }
 
-function safelyRemove(storage: Storage, key: string): void {
+function safelyWrite(storage: Storage | undefined, key: string, value: unknown): void {
   try {
-    storage.removeItem(key);
+    storage?.setItem(key, JSON.stringify(value));
+  } catch {
+    // Reading live data remains useful when private browsing or storage limits block caching.
+  }
+}
+
+function safelyRead(storage: Storage | undefined, key: string): unknown | undefined {
+  try {
+    const value = storage?.getItem(key);
+    return value == null ? undefined : JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+}
+
+function safelyRemove(storage: Storage | undefined, key: string): void {
+  try {
+    storage?.removeItem(key);
   } catch {
     // Storage errors do not change the current network result.
   }
