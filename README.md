@@ -11,6 +11,9 @@ npm install
 npm run dev
 ```
 
+The browser UI is written in Elm 0.19.1 and compiled by Vite. npm installs the Elm compiler,
+formatter, and test runner; the first compilation downloads packages from the Elm registry.
+
 Browser geolocation works on `localhost`. Production deployments must use HTTPS.
 On page load, the app resumes a previously successful location choice or uses location if permission is already granted.
 It remembers only whether location mode is enabled, and asks the browser for coordinates again after a refresh.
@@ -116,7 +119,24 @@ Then run the complete check:
 npm run verify
 ```
 
-The check runs linting, TypeScript, unit tests, the production build, Worker integration tests with isolated local D1 storage, and browser tests against the built app.
+The check runs Biome and Elm formatting checks, TypeScript and Elm compilation, both unit-test suites, the production build, Worker integration tests with isolated local D1 storage, and browser tests against the built app.
+
+### Architecture and Elm commands
+
+- `src/elm/Main.elm`: Elm model/update/view, UI controls, disclosure state, and race-safe location transitions.
+- `src/elm/AirQuality.elm`: reading decoders, interpolation, PSI blending, and severity bands.
+- `src/main.ts`: ports for browser APIs, the validated/cached data client, OneMap, appearance, and badge synchronization. Browser-owned custom elements isolate the existing SVG map and badge controls from Elm's virtual DOM.
+- `worker/`: TypeScript Cloudflare Worker and service worker; their runtime and storage protocols are unchanged.
+
+| Command | Purpose |
+| --- | --- |
+| `npm run typecheck` | Check TypeScript and compile Elm |
+| `npm run test:elm` | Run Elm calculation and state-transition tests |
+| `npm run format:elm` | Format Elm source and tests |
+| `npm test` | Run TypeScript unit tests |
+| `npm run build` | Build the optimized Elm app and service worker |
+
+See [ADR-006: Elm browser application](docs/decisions/006-elm-browser-application.md) for the port boundary and map/card estimator parity requirements.
 
 To test the built app against the live data.gov.sg endpoints, run:
 
@@ -151,7 +171,7 @@ Color is reserved for air-quality severity. The interface, controls, and freshne
 
 Calculations, reading guidance, and badge installation help use collapsed native disclosures to keep repeat visits focused on readings. Values, severity, timestamps, controls, privacy information, and warnings remain visible. Disclosure choices survive in-page refreshes but reset on a new visit. See [ADR-003: Progressive disclosure](docs/decisions/003-progressive-disclosure.md).
 
-The expandable PM2.5 map samples the same inverse-distance estimator across a coarse grid and colors cells by the documented PM2.5 bands. Tap a point or use arrow keys to inspect its five regional weights without changing your selected location. It is a model illustration, not measured pollution coverage; reference dots are not individual monitoring stations. The map bundles a simplified Natural Earth outline and makes no tile requests. See [ADR-005: PM2.5 interpolation map](docs/decisions/005-pm25-interpolation-map.md).
+The expandable PM2.5 map samples the TypeScript counterpart of the Elm card's inverse-distance estimator across a coarse grid and colors cells by the documented PM2.5 bands. Tap a point or use arrow keys to inspect its five regional weights without changing your selected location. It is a model illustration, not measured pollution coverage; reference dots are not individual monitoring stations. The map bundles a simplified Natural Earth outline and makes no tile requests. See [ADR-005: PM2.5 interpolation map](docs/decisions/005-pm25-interpolation-map.md).
 
 ## Data and privacy
 
