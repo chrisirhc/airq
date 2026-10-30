@@ -4,23 +4,22 @@ import type { AirQualitySnapshot } from "./domain";
 
 export { parsePm25, parsePsi } from "./public-readings";
 
-const readingsRequest = {
+export const readingsRequest = {
   pm25: { value: true },
   psi: { value: true },
 } as const;
 
+export const airQualityRoots = {
+  pm25: clientValueRoot<AirQualitySnapshot["pm25"]>(),
+  psi: clientValueRoot<AirQualitySnapshot["psi"]>(),
+};
+
 export function createAirQualityClient(options: AirQualityClientOptions = {}) {
-  const client = createClient({
-    roots: {
-      pm25: clientValueRoot<AirQualitySnapshot["pm25"]>(),
-      psi: clientValueRoot<AirQualitySnapshot["psi"]>(),
-    },
+  return createClient({
+    roots: airQualityRoots,
     transport: createAirQualityTransport(options),
     types: [],
   });
-
-  return {
-    load: (): Promise<AirQualitySnapshot> =>
-      client.request(readingsRequest, { mode: "network-only" }),
-  };
 }
+
+export type AirQualityClient = ReturnType<typeof createAirQualityClient>;

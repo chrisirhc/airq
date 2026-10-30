@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { createAirQualityClient, parsePm25, parsePsi } from "./air-quality-client";
+import { createAirQualityClient, parsePm25, parsePsi, readingsRequest } from "./air-quality-client";
 
 const loadAirQuality = (options: Parameters<typeof createAirQualityClient>[0]) =>
-  createAirQualityClient(options).load();
+  createAirQualityClient(options).request(readingsRequest, { mode: "network-only" });
 
 const now = new Date("2026-10-05T10:00:00+08:00");
 
@@ -128,13 +128,16 @@ describe("air-quality API parsing", () => {
       now: () => now,
     });
 
-    const [first, concurrent] = await Promise.all([client.load(), client.load()]);
+    const [first, concurrent] = await Promise.all([
+      client.request(readingsRequest, { mode: "network-only" }),
+      client.request(readingsRequest, { mode: "network-only" }),
+    ]);
     expect(first).toEqual(concurrent);
     expect(calls).toBe(2);
 
     pm25 = pm25Response();
     for (const item of pm25.data.items) item.readings.pm25_one_hourly.central = 99;
-    const refreshed = await client.load();
+    const refreshed = await client.request(readingsRequest, { mode: "network-only" });
     expect(refreshed.pm25).toMatchObject({ reading: { values: { central: 99 } } });
     expect(calls).toBe(4);
   });
@@ -147,7 +150,7 @@ describe("air-quality API parsing", () => {
       const result = await createAirQualityClient({
         fetcher: makeFetcher({ pm25: pm25Response(), psi: psiResponse() }),
         now: () => now,
-      }).load();
+      }).request(readingsRequest, { mode: "network-only" });
       expect(result.pm25).toMatchObject({ kind: "available", source: "live" });
       expect(result.psi).toMatchObject({ kind: "available", source: "live" });
     } finally {

@@ -5,10 +5,6 @@ import type { AirQualitySnapshot } from "./domain";
 import { lookupLocationName } from "./location-name";
 import { parsePm25, parsePsi } from "./public-readings";
 
-const { loadAirQuality } = vi.hoisted(() => ({ loadAirQuality: vi.fn() }));
-vi.mock("./air-quality-client", () => ({
-  createAirQualityClient: () => ({ load: loadAirQuality }),
-}));
 vi.mock("./location-name", () => ({ lookupLocationName: vi.fn() }));
 
 function available(): AirQualitySnapshot {
@@ -26,7 +22,7 @@ function available(): AirQualitySnapshot {
   };
 }
 function deferred<T>() {
-  let resolve!: (value: T) => void;
+  let resolve: (value: T) => void = () => {};
   const promise = new Promise<T>((done) => {
     resolve = done;
   });
@@ -35,7 +31,6 @@ function deferred<T>() {
 const cleanup: (() => void)[] = [];
 beforeEach(() => {
   localStorage.clear();
-  vi.mocked(loadAirQuality).mockReset();
   vi.mocked(lookupLocationName).mockReset().mockResolvedValue(null);
   vi.stubGlobal("navigator", {
     permissions: { query: vi.fn().mockResolvedValue({ state: "prompt" }) },
@@ -50,12 +45,13 @@ afterEach(() => {
 
 describe("React browser controller lifecycle", () => {
   it("has a pure factory and stable snapshots until an update is published", () => {
-    const addDocumentListener = vi.spyOn(document, "addEventListener");
-    const addWindowListener = vi.spyOn(window, "addEventListener");
-    const controller = createAirQualityController();
-    expect(loadAirQuality).not.toHaveBeenCalled();
-    expect(addDocumentListener).not.toHaveBeenCalled();
-    expect(addWindowListener).not.toHaveBeenCalled();
+    const fetch = vi.spyOn(globalThis, "fetch");
+    const documentListener = vi.spyOn(document, "addEventListener");
+    const windowListener = vi.spyOn(window, "addEventListener");
+    const controller = createAirQualityController(available());
+    expect(fetch).not.toHaveBeenCalled();
+    expect(documentListener).not.toHaveBeenCalled();
+    expect(windowListener).not.toHaveBeenCalled();
     expect(controller.getSnapshot()).toBe(controller.getSnapshot());
     const notify = vi.fn();
     cleanup.push(controller.subscribe(notify));
@@ -64,51 +60,52 @@ describe("React browser controller lifecycle", () => {
     expect(notify).not.toHaveBeenCalled();
   });
 
-  it("ignores a pre-cleanup data response after Strict Mode effect replay", async () => {
-    const old = deferred<AirQualitySnapshot>();
-    const current = deferred<AirQualitySnapshot>();
-    vi.mocked(loadAirQuality).mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise);
-    const controller = createAirQualityController();
+  it("ignores a pre-cleanup permission response after Strict Mode effect replay", async () => {
+    const old = deferred<PermissionStatus>();
+    vi.mocked(navigator.permissions.query).mockReturnValueOnce(old.promise);
+    const controller = createAirQualityController(available());
     controller.start()();
     cleanup.push(controller.start());
-    current.resolve(available());
-    await vi.waitFor(() => expect(controller.getSnapshot().state.data.kind).toBe("loaded"));
-    const snapshot = controller.getSnapshot();
-    old.resolve({
-      pm25: { kind: "unavailable", message: "Old result" },
-      psi: { kind: "unavailable", message: "Old result" },
-    });
+    const permission = {
+      state: "granted",
+      onchange: null,
+      name: "geolocation",
+      addEventListener() {},
+      removeEventListener() {},
+      dispatchEvent() {
+        return true;
+      },
+    } satisfies PermissionStatus;
+    old.resolve(permission);
     await old.promise;
     await Promise.resolve();
-    expect(controller.getSnapshot()).toBe(snapshot);
+    expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled();
   });
 
-  it("detaches browser listeners and does not publish late data after unmount", async () => {
-    const result = deferred<AirQualitySnapshot>();
-    vi.mocked(loadAirQuality).mockReturnValue(result.promise);
+  it("detaches browser listeners and ignores readings delivered after unmount", async () => {
     const removeDocumentListener = vi.spyOn(document, "removeEventListener");
     const removeWindowListener = vi.spyOn(window, "removeEventListener");
-    const controller = createAirQualityController();
+    const controller = createAirQualityController(available());
     const notify = vi.fn();
     cleanup.push(controller.subscribe(notify));
     const stop = controller.start();
     await Promise.resolve();
     stop();
+    const snapshot = controller.getSnapshot();
     const calls = notify.mock.calls.length;
-    result.resolve(available());
-    await result.promise;
-    await Promise.resolve();
+    controller.updateReadings({
+      pm25: { kind: "unavailable", message: "Late readings" },
+      psi: { kind: "unavailable", message: "Late readings" },
+    });
+    expect(controller.getSnapshot()).toBe(snapshot);
     expect(notify).toHaveBeenCalledTimes(calls);
-    expect(controller.getSnapshot().state.data.kind).toBe("loading");
     expect(removeDocumentListener).toHaveBeenCalledWith("visibilitychange", expect.any(Function));
     expect(removeWindowListener).toHaveBeenCalledWith("focus", expect.any(Function));
   });
 
   it("ignores a late browser position after unmount", async () => {
-    vi.mocked(loadAirQuality).mockResolvedValue(available());
-    const controller = createAirQualityController();
+    const controller = createAirQualityController(available());
     const stop = controller.start();
-    await vi.waitFor(() => expect(controller.getSnapshot().state.data.kind).toBe("loaded"));
     controller.requestLocation();
     const success = vi.mocked(navigator.geolocation.getCurrentPosition).mock.calls[0]?.[0];
     if (!success) throw new Error("Missing position callback");
@@ -118,25 +115,9 @@ describe("React browser controller lifecycle", () => {
     expect(lookupLocationName).not.toHaveBeenCalled();
   });
 
-  it("rejects obsolete retries and late geocoding after a manual choice", async () => {
-    vi.mocked(loadAirQuality).mockResolvedValue(available());
-    const controller = createAirQualityController();
+  it("ignores late geocoding after a manual choice", async () => {
+    const controller = createAirQualityController(available());
     cleanup.push(controller.start());
-    await vi.waitFor(() => expect(controller.getSnapshot().state.data.kind).toBe("loaded"));
-    const old = deferred<AirQualitySnapshot>();
-    const current = deferred<AirQualitySnapshot>();
-    vi.mocked(loadAirQuality).mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise);
-    controller.retry();
-    controller.retry();
-    current.resolve(available());
-    await vi.waitFor(() => expect(controller.getSnapshot().state.data.kind).toBe("loaded"));
-    old.resolve({
-      pm25: { kind: "unavailable", message: "Old retry" },
-      psi: { kind: "unavailable", message: "Old retry" },
-    });
-    await old.promise;
-    await Promise.resolve();
-    expect(controller.getSnapshot().state.data.kind).toBe("loaded");
     const name = deferred<string | null>();
     vi.mocked(lookupLocationName).mockReturnValue(name.promise);
     controller.requestLocation();

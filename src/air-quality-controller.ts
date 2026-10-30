@@ -1,4 +1,3 @@
-import { createAirQualityClient } from "./air-quality-client";
 import { createBackgroundBadge } from "./background-badge";
 import {
   badgeTargetSchema,
@@ -24,27 +23,21 @@ export type DisplayMode =
       readonly coordinate: Coordinate;
     };
 
-type DataState =
-  | { readonly kind: "loading" }
-  | { readonly kind: "loaded"; readonly snapshot: AirQualitySnapshot };
-
 type LocationState =
   | { readonly kind: "idle" }
   | { readonly kind: "requesting" }
   | { readonly kind: "error"; readonly message: string };
 
 export interface AppState {
-  readonly data: DataState;
+  readonly readings: AirQualitySnapshot;
   readonly display: DisplayMode;
   readonly location: LocationState;
 }
 
 // Browser callbacks share one synchronous state snapshot; React subscribes without tearing.
-export function createAirQualityController() {
-  const airQuality = createAirQualityClient();
-  let loadGeneration = 0;
+export function createAirQualityController(initialReadings: AirQualitySnapshot) {
   let state: AppState = {
-    data: { kind: "loading" },
+    readings: initialReadings,
     display: { kind: "manual", region: "central" },
     location: { kind: "idle" },
   };
@@ -70,13 +63,7 @@ export function createAirQualityController() {
       syncBadge(state.display.kind === "estimated");
       publish();
     });
-    await load();
-    if (
-      !active ||
-      locationRequestId !== generation ||
-      state.data.kind !== "loaded" ||
-      state.data.snapshot.pm25.kind !== "available"
-    ) {
+    if (!active || locationRequestId !== generation || state.readings.pm25.kind !== "available") {
       return;
     }
 
@@ -115,10 +102,8 @@ export function createAirQualityController() {
     }
   }
 
-  async function load(): Promise<void> {
-    const generation = loadGeneration;
-    const snapshot = await airQuality.load();
-    if (!active || generation !== loadGeneration) return;
+  function updateReadings(snapshot: AirQualitySnapshot): void {
+    if (!active || state.readings === snapshot) return;
     if (state.display.kind === "estimated" && snapshot.pm25.kind === "available") {
       const display = state.display;
       const reading = snapshot.pm25.reading;
@@ -153,18 +138,17 @@ export function createAirQualityController() {
         };
       }
     }
-    state = { ...state, data: { kind: "loaded", snapshot } };
+    state = { ...state, readings: snapshot };
     syncBadge(false);
     publish();
   }
 
   function syncBadge(replaceTarget: boolean): void {
-    if (state.data.kind === "loading") return;
-    if (state.data.snapshot.pm25.kind !== "available") {
+    if (state.readings.pm25.kind !== "available") {
       badge.sync(null, false);
       return;
     }
-    const reading = state.data.snapshot.pm25.reading;
+    const reading = state.readings.pm25.reading;
     const snapshot = {
       revision: 0,
       readingAt: reading.timestamp.getTime(),
@@ -230,7 +214,7 @@ export function createAirQualityController() {
   }
 
   function applyPosition(latitude: number, longitude: number): void {
-    if (state.data.kind !== "loaded" || state.data.snapshot.pm25.kind !== "available") {
+    if (state.readings.pm25.kind !== "available") {
       state = {
         ...state,
         location: {
@@ -252,7 +236,7 @@ export function createAirQualityController() {
       return;
     }
 
-    const pm25 = state.data.snapshot.pm25.reading;
+    const pm25 = state.readings.pm25.reading;
     const result = estimatePm25({
       coordinate: coordinate.data,
       references: pm25.references,
@@ -335,12 +319,6 @@ export function createAirQualityController() {
     syncBadge(true);
     publish();
   }
-  function retry(): void {
-    loadGeneration++;
-    state = { ...state, data: { kind: "loading" } };
-    publish();
-    void load();
-  }
   return {
     subscribe(listener: () => void) {
       listeners.add(listener);
@@ -356,13 +334,12 @@ export function createAirQualityController() {
       return () => {
         active = false;
         locationRequestId++;
-        loadGeneration++;
         badge.disconnect();
       };
     },
     requestLocation,
     selectRegion,
-    retry,
+    updateReadings,
     badge,
   };
 }

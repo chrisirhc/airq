@@ -90,3 +90,81 @@ test("synchronizes appearance overrides and storage clearing from another tab", 
   await expect(page.locator("#theme-button")).toHaveText("Theme: System");
   await expect(page.locator(".primary-card")).toHaveCSS("background-color", "rgb(255, 255, 255)");
 });
+
+test("suspends readings while keeping the shell interactive and sharing Strict Mode requests", async ({
+  page,
+}) => {
+  let release: () => void = () => {};
+  const ready = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let requests = 0;
+  await page.route("https://api-open.data.gov.sg/v2/real-time/api/*", async (route) => {
+    requests++;
+    await ready;
+    await route.fulfill({
+      json: route.request().url().endsWith("/pm25") ? pm25Response : psiResponse,
+    });
+  });
+  await page.goto("/");
+  await expect(page.getByText("Loading official data")).toBeVisible();
+  const theme = page.locator("#theme-button");
+  const themeNode = await theme.elementHandle();
+  await theme.click();
+  await expect(theme).toHaveText("Theme: Light");
+  await page.locator("#reading-guidance > summary").click();
+  release();
+  await expect(page.getByText("Central region PM2.5")).toBeVisible();
+  await expect(page.locator("#reading-guidance")).toHaveAttribute("open", "");
+  expect(await themeNode?.evaluate((node) => node.isConnected)).toBe(true);
+  expect(requests).toBe(2);
+});
+
+test("keeps committed readings, controls, and map inspection during an async refresh", async ({
+  page,
+}) => {
+  let recover = false;
+  let release: () => void = () => {};
+  const ready = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const refreshed = structuredClone(pm25Response);
+  for (const item of refreshed.data.items) item.readings.pm25_one_hourly.east = 99;
+  await page.route("https://api-open.data.gov.sg/v2/real-time/api/*", async (route) => {
+    if (!recover) {
+      if (route.request().url().endsWith("/psi")) return route.abort();
+      return route.fulfill({ json: pm25Response });
+    }
+    await ready;
+    await route.fulfill({
+      json: route.request().url().endsWith("/pm25") ? refreshed : psiResponse,
+    });
+  });
+  await page.goto("/");
+  await expect(page.getByText("Reading unavailable")).toBeVisible();
+  const select = page.locator("#region-select");
+  await select.selectOption("west");
+  await page.locator("#pm25-map > summary").click();
+  const map = page.getByRole("group", { name: "Interactive modelled PM2.5 heatmap" });
+  await map.focus();
+  await page.keyboard.press("ArrowRight");
+  const mapNode = await map.elementHandle();
+  const selectNode = await select.elementHandle();
+  const inspected = await page.locator(".heatmap-point h3").textContent();
+  const value = await page.locator(".primary-card .reading-value strong").textContent();
+  recover = true;
+  await page.getByRole("button", { name: "Try again" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Refreshing readings…" })).toBeVisible();
+  await expect(page.locator(".primary-card .reading-value strong")).toHaveText(value ?? "");
+  await expect(page.locator(".heatmap-point h3")).toHaveText(inspected ?? "");
+  await select.selectOption("east");
+  await select.focus();
+  release();
+  await expect(page.locator(".primary-card .reading-value strong")).toHaveText("99");
+  await expect(page.getByText("East region PSI")).toBeVisible();
+  await expect(select).toBeFocused();
+  await expect(select).toHaveValue("east");
+  expect(await selectNode?.evaluate((node) => node.isConnected)).toBe(true);
+  expect(await mapNode?.evaluate((node) => node.isConnected)).toBe(true);
+  await expect(page.getByText("Refreshing readings…")).toHaveCount(0);
+});

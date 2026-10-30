@@ -8,23 +8,25 @@ import type { Pm25Estimate } from "./location-estimator";
 export const ESTIMATION_METHOD_URL =
   "https://pro.arcgis.com/en/pro-app/3.5/help/analysis/geostatistical-analyst/how-inverse-distance-weighted-interpolation-works.htm";
 
+export function LoadingReadings() {
+  return (
+    <>
+      <article className="reading-card skeleton-card">
+        <p className="card-kicker">Loading official data</p>
+        <div className="skeleton-line wide" />
+        <div className="skeleton-line" />
+      </article>
+      <article className="reading-card skeleton-card">
+        <p className="card-kicker">Checking latest readings</p>
+        <div className="skeleton-line wide" />
+        <div className="skeleton-line" />
+      </article>
+    </>
+  );
+}
+
 export function Readings({ state, retry }: { state: AppState; retry: () => void }) {
-  if (state.data.kind === "loading")
-    return (
-      <>
-        <article className="reading-card skeleton-card">
-          <p className="card-kicker">Loading official data</p>
-          <div className="skeleton-line wide" />
-          <div className="skeleton-line" />
-        </article>
-        <article className="reading-card skeleton-card">
-          <p className="card-kicker">Checking latest readings</p>
-          <div className="skeleton-line wide" />
-          <div className="skeleton-line" />
-        </article>
-      </>
-    );
-  const { pm25, psi } = state.data.snapshot;
+  const { pm25, psi } = state.readings;
   const display = state.display;
   const region = display.kind === "manual" ? display.region : display.estimate.closestRegion;
   const pmValue =
