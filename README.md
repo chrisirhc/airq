@@ -6,6 +6,8 @@ The interface defaults to your system's light or dark appearance, including chan
 
 ## Run locally
 
+Use Node.js 24.21 or later. `npm install` runs `void prepare` to generate local route and environment types.
+
 ```sh
 npm install
 npm run dev
@@ -35,17 +37,16 @@ npm ci
 npx playwright install
 ```
 
-Authorize Wrangler with the Cloudflare account that manages `b65.dev`.
+Connect Void to the Cloudflare account that manages `b65.dev`.
 Complete the authorization in the browser that opens:
 
 ```sh
-npx wrangler login
-npx wrangler whoami
+npx void connect --platform cloudflare
 ```
 
-Confirm that `whoami` reports the intended account before deploying.
-If authorization times out, run `npx wrangler login` again.
-Wrangler stores the login locally. Do not commit credentials or API tokens.
+Select the intended Cloudflare account before deploying.
+If authorization times out, run `npx void connect --platform cloudflare` again.
+The connection is local. Do not commit credentials or API tokens.
 
 ### Publish an update
 
@@ -58,17 +59,19 @@ npm run verify
 Optionally validate the upload configuration without publishing:
 
 ```sh
-npx wrangler deploy --dry-run
+npx wrangler deploy --config dist/ssr/wrangler.json --dry-run
 ```
 
-The verification command builds `dist/`, which the dry run inspects.
+The verification command builds `dist/client/` and `dist/ssr/`. The dry run inspects the generated Worker and assets.
 Build again and publish to production:
 
 ```sh
 npm run deploy
 ```
 
-`npm run deploy` runs `npm run build` followed by `wrangler deploy`.
+`npm run deploy` runs `npm run build` followed by `void deploy --platform cloudflare`.
+Void builds the deployment and uses the bindings and domain in `void.config.ts`.
+If Void creates or updates `void.lock.json`, commit it to preserve resolved resource IDs.
 It uploads the local build, including any uncommitted changes.
 Review the working copy before publishing. Pushing to GitHub does not deploy the site automatically.
 
@@ -94,10 +97,11 @@ The HTTP check proves that the site is reachable. The browser checks also verify
 
 ### Hosting configuration
 
-`wrangler.jsonc` configures the `airq` Worker to serve `dist/` at `https://airq.b65.dev/`.
+`void.config.ts` configures the `airq` Worker and its custom domain at `https://airq.b65.dev/`.
+Void builds file-based routes from `routes/`, static assets in `dist/client/`, and a Worker in `dist/ssr/`.
 The `workers.dev` hostname is disabled.
 Cloudflare manages the custom domain's DNS record and HTTPS certificate.
-The deploy uploads the static build and `worker/index.ts`. Browser air-quality requests still go directly to data.gov.sg. The optional badge-test endpoint also reads public PM2.5 data server-side.
+The deploy uploads the static build and Void-generated Worker. Browser air-quality requests still go directly to data.gov.sg. The optional badge-test endpoint also reads public PM2.5 data server-side.
 
 The older copy at `https://static.slt.b65.dev/airq/index.html` is a separate deployment.
 `npm run deploy` updates Cloudflare only.
@@ -126,18 +130,23 @@ npm run test:live
 
 ## Configure OneMap location names
 
-Register a [OneMap account](https://www.onemap.gov.sg/apidocs/register), then configure the Worker secrets. Enter the values at the prompts; do not put credentials in source code:
+Register a [OneMap account](https://www.onemap.gov.sg/apidocs/register), then configure the Worker secrets.
+Authenticate Wrangler with `npx wrangler login` if needed.
+Enter the values at the prompts; do not put credentials in source code:
 
 ```sh
-npx wrangler secret put ONEMAP_EMAIL
-npx wrangler secret put ONEMAP_PASSWORD
+npx wrangler secret put ONEMAP_EMAIL --config .void-wrangler.jsonc
+npx wrangler secret put ONEMAP_PASSWORD --config .void-wrangler.jsonc
 ```
 
 The Worker obtains an authentication token and reuses it in memory until one minute before expiry. OneMap tokens last three days. Concurrent lookups in the same Worker isolate share token acquisition. Separate isolates obtain their own tokens. Lookups search for buildings within 100 metres and choose the nearest usable name. The UI says "near" because browser coordinates and the nearest address may not identify the user's exact building.
 
 OneMap publishes a 300-call/minute limit. The app performs one lookup per accepted browser position, with no polling or automatic retries. The Worker returns `Cache-Control: no-store`, and credentials and tokens never reach the browser. Missing credentials, upstream errors, timeouts and rate limits fall back to the generic location label.
 
-For local end-to-end use, copy `.dev.vars.example` to `.dev.vars`, fill in your credentials, run `npm run build`, then `npx wrangler dev`. Vite's standalone dev/preview server does not run the Worker, so it uses the generic location label.
+For local end-to-end use, create a gitignored `.env` file with `ONEMAP_EMAIL` and `ONEMAP_PASSWORD`, then run `npm run dev`.
+Void runs the routes in the local Cloudflare runtime. Optional server values are declared in `env.ts`.
+Use only `.env` for local values; Void rejects `.dev.vars` and example env files.
+Without OneMap credentials, the route returns the existing generic-location fallback.
 
 ### Diagnose location lookup failures
 
@@ -152,6 +161,17 @@ Color is reserved for air-quality severity. The interface, controls, and freshne
 Calculations, reading guidance, and badge installation help use collapsed native disclosures to keep repeat visits focused on readings. Values, severity, timestamps, controls, privacy information, and warnings remain visible. Disclosure choices survive in-page refreshes but reset on a new visit. See [ADR-003: Progressive disclosure](docs/decisions/003-progressive-disclosure.md).
 
 The expandable PM2.5 map samples the same inverse-distance estimator across a coarse grid and colors cells by the documented PM2.5 bands. Tap a point or use arrow keys to inspect its five regional weights without changing your selected location. It is a model illustration, not measured pollution coverage; reference dots are not individual monitoring stations. The map bundles a simplified Natural Earth outline and makes no tile requests. See [ADR-005: PM2.5 interpolation map](docs/decisions/005-pm25-interpolation-map.md).
+
+## Data client and routes
+
+`src/air-quality-client.ts` creates a framework-free [Fate](https://fate.technology/guide/getting-started) client with typed PM2.5 and PSI value roots.
+The app keeps one client for its lifetime. Concurrent loads share requests, and later refreshes use `network-only` to fetch new readings.
+`src/air-quality-transport.ts` handles the public API, validation, two attempts per endpoint, six-second attempt timeouts, and the existing per-metric offline cache.
+
+[Void](https://void.cloud/guide/server-routing) owns the server routes in `routes/`.
+The location route calls the OneMap handler, and the badge catch-all calls the existing badge service.
+Explicit routes keep the service worker and manifest revalidating with `Cache-Control: no-cache`.
+See [ADR-006](docs/decisions/006-fate-and-void.md) for the scope and tradeoffs.
 
 ## Data and privacy
 
