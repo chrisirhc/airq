@@ -1,5 +1,5 @@
 import "./styles.css";
-import { loadAirQuality } from "./air-quality-client";
+import { createAirQualityClient } from "./air-quality-client";
 import { createBackgroundBadge } from "./background-badge";
 import {
   badgeTargetSchema,
@@ -54,6 +54,7 @@ interface AppState {
 }
 
 const root = findRoot();
+const airQuality = createAirQualityClient();
 
 let state: AppState = {
   data: { kind: "loading" },
@@ -122,7 +123,7 @@ function saveLocationPreference(preference: "enabled" | "disabled"): void {
 }
 
 async function load(): Promise<void> {
-  const snapshot = await loadAirQuality();
+  const snapshot = await airQuality.load();
   if (state.display.kind === "estimated" && snapshot.pm25.kind === "available") {
     const display = state.display;
     const reading = snapshot.pm25.reading;

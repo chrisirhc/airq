@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { loadAirQuality, parsePm25, parsePsi } from "./air-quality-client";
+import { createAirQualityClient, parsePm25, parsePsi } from "./air-quality-client";
+
+const loadAirQuality = (options: Parameters<typeof createAirQualityClient>[0]) =>
+  createAirQualityClient(options).load();
 
 const now = new Date("2026-10-05T10:00:00+08:00");
 
@@ -110,6 +113,30 @@ describe("air-quality API parsing", () => {
     expect(result.pm25).toEqual({ kind: "unavailable", message: "Offline" });
     expect(result.psi).toMatchObject({ kind: "available", source: "live" });
     expect(storage.getItem("airq:pm25:v1")).toBeNull();
+  });
+
+  it("shares concurrent loads but fetches fresh data on the next refresh", async () => {
+    let calls = 0;
+    let pm25 = pm25Response();
+    const fetcher: typeof fetch = async (input, init) => {
+      calls += 1;
+      return makeFetcher({ pm25, psi: psiResponse() })(input, init);
+    };
+    const client = createAirQualityClient({
+      fetcher,
+      storage: new MemoryStorage(),
+      now: () => now,
+    });
+
+    const [first, concurrent] = await Promise.all([client.load(), client.load()]);
+    expect(first).toEqual(concurrent);
+    expect(calls).toBe(2);
+
+    pm25 = pm25Response();
+    for (const item of pm25.data.items) item.readings.pm25_one_hourly.central = 99;
+    const refreshed = await client.load();
+    expect(refreshed.pm25).toMatchObject({ reading: { values: { central: 99 } } });
+    expect(calls).toBe(4);
   });
 });
 
