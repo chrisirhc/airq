@@ -168,6 +168,7 @@ A per-app browser controller exposes immutable snapshots through `useSyncExterna
 It receives committed readings from Fate and does not fetch data or manage loading/retry generations.
 React owns rendering, theme state, map inspection, and visit-scoped disclosure choices.
 See [ADR-008: Async React with Fate](docs/decisions/008-async-react-with-fate.md) and the [original React decision](docs/decisions/007-react-frontend.md).
+The [React best-practices review](docs/react-best-practices-review.md) records the optional-map code split and separate reading/badge subscriptions.
 
 Useful checks: `npm run typecheck`, `npm run lint`, `npm test` (unit/component tests), `npm run build`, `npm run test:worker`, and `npm run test:browser` (against the production build).
 
