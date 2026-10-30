@@ -1,9 +1,13 @@
 import { spawn } from "node:child_process";
 import { chromium } from "@playwright/test";
 
-const server = spawn("npm", ["run", "preview", "--", "--host", "127.0.0.1"], {
-  stdio: ["ignore", "pipe", "pipe"],
-});
+const server = spawn(
+  "npm",
+  ["run", "preview", "--", "--host", "127.0.0.1", "--port", "4188", "--strictPort"],
+  {
+    stdio: ["ignore", "pipe", "pipe"],
+  },
+);
 
 let serverError = "";
 server.stderr.on("data", (chunk) => {
@@ -15,7 +19,7 @@ try {
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage();
-    await page.goto("http://127.0.0.1:4173", { waitUntil: "networkidle" });
+    await page.goto("http://127.0.0.1:4188", { waitUntil: "networkidle" });
     await page.getByText("Central region PM2.5").waitFor();
     await page.getByText("Central region PSI").waitFor();
 
@@ -41,7 +45,7 @@ async function waitForServer(process) {
       10_000,
     );
     const onData = (chunk) => {
-      if (!chunk.toString().includes("http://127.0.0.1:4173")) return;
+      if (!chunk.toString().includes("http://127.0.0.1:4188")) return;
       clearTimeout(timeout);
       process.stdout.off("data", onData);
       resolve();

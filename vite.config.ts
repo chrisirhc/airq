@@ -1,15 +1,23 @@
 import { defineConfig } from "vitest/config";
+import { voidPlugin } from "void";
 
 export default defineConfig({
   base: "./",
+  plugins: process.env.VITEST ? [] : [voidPlugin()],
   preview: {
     allowedHosts: ["slateserver.lan", "airq.slt.b65.dev"],
   },
-  build: {
-    rollupOptions: {
-      input: { app: "index.html", sw: "worker/service-worker.ts" },
-      output: {
-        entryFileNames: (chunk) => (chunk.name === "sw" ? "sw.js" : "assets/[name]-[hash].js"),
+  build: { outDir: "dist/client", cssTarget: ["chrome123", "firefox120", "safari17.5"] },
+  environments: {
+    client: {
+      build: {
+        outDir: "dist/client",
+        rollupOptions: {
+          input: { app: "index.html", sw: "worker/service-worker.ts" },
+          output: {
+            entryFileNames: (chunk) => (chunk.name === "sw" ? "sw.js" : "assets/[name]-[hash].js"),
+          },
+        },
       },
     },
   },

@@ -13,5 +13,5 @@
     "noUnusedParameters": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.server.tsbuildinfo"
   },
-  "include": ["worker/index.ts"]
+  "include": ["worker/badge.ts", "worker/bindings.d.ts", "routes"]
 }

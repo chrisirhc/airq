@@ -14,10 +14,11 @@ const server = createTestHarness({
     {
       config: {
         name: "airq-badge-test",
-        main: "worker/index.ts",
+        main: "dist/ssr/index.js",
+        compatibility_flags: ["nodejs_compat"],
         compatibility_date: "2026-10-05",
         assets: {
-          directory: "./dist",
+          directory: "./dist/client",
           binding: "ASSETS",
           run_worker_first: ["/api/*", "/sw.js", "/manifest.webmanifest"],
         },
@@ -148,6 +149,11 @@ try {
   });
   assert.equal(config.headers.get("Cache-Control"), "no-store");
   assert.equal((await worker.fetch(`${origin}/sw.js`)).headers.get("Cache-Control"), "no-cache");
+  assert.equal(
+    (await worker.fetch(`${origin}/manifest.webmanifest`)).headers.get("Cache-Control"),
+    "no-cache",
+  );
+  assert.equal((await worker.fetch(`${origin}/api/unknown`)).status, 404);
   process.stdout.write(
     "[worker] Registration, idempotency, authorization, endpoint restrictions, expiry, rate limit, deletion, and cache headers passed.\n",
   );

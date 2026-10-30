@@ -21,7 +21,7 @@ The production app works without D1 or VAPID configuration, but its background-t
 
    If that database already exists, find its ID with `npx wrangler d1 list --json`. Do not create another database.
 
-3. Add the returned database ID to `wrangler.jsonc`:
+3. Add the returned database ID under `cloudflare.d1_databases` in `void.config.ts`:
 
    ```json
    "d1_databases": [{
@@ -35,7 +35,8 @@ The production app works without D1 or VAPID configuration, but its background-t
 4. Apply the migration:
 
    ```sh
-   npx wrangler d1 migrations apply airq-badge --remote
+   npm run prepare
+   npx wrangler d1 migrations apply airq-badge --remote --config .void-wrangler.jsonc
    ```
 
 5. Create VAPID secrets using your contact address:
