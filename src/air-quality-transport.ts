@@ -18,7 +18,7 @@ export interface AirQualityClientOptions {
 
 export function createAirQualityTransport(options: AirQualityClientOptions = {}) {
   const fetcher = options.fetcher ?? fetch;
-  const storage = options.storage ?? window.localStorage;
+  const storage = options.storage ?? browserStorage();
   const now = options.now ?? (() => new Date());
   const staleAfterMs = options.staleAfterMs ?? DEFAULT_STALE_AFTER_MS;
 
@@ -61,7 +61,7 @@ async function loadMetric<T>({
   readonly url: string;
   readonly cacheKey: string;
   readonly fetcher: typeof fetch;
-  readonly storage: Storage;
+  readonly storage: Storage | undefined;
   readonly parse: (value: unknown) => T;
 }): Promise<MetricResult<T>> {
   try {
@@ -101,26 +101,26 @@ async function fetchJsonWithRetry(url: string, fetcher: typeof fetch): Promise<u
   throw latestError;
 }
 
-function safelyWrite(storage: Storage, key: string, value: unknown): void {
+function safelyWrite(storage: Storage | undefined, key: string, value: unknown): void {
   try {
-    storage.setItem(key, JSON.stringify(value));
+    storage?.setItem(key, JSON.stringify(value));
   } catch {
     // Reading live data remains useful when private browsing or storage limits block caching.
   }
 }
 
-function safelyRead(storage: Storage, key: string): unknown | undefined {
+function safelyRead(storage: Storage | undefined, key: string): unknown | undefined {
   try {
-    const value = storage.getItem(key);
+    const value = storage?.getItem(key) ?? null;
     return value === null ? undefined : JSON.parse(value);
   } catch {
     return undefined;
   }
 }
 
-function safelyRemove(storage: Storage, key: string): void {
+function safelyRemove(storage: Storage | undefined, key: string): void {
   try {
-    storage.removeItem(key);
+    storage?.removeItem(key);
   } catch {
     // Storage errors do not change the current network result.
   }
@@ -132,4 +132,12 @@ function errorMessage(error: unknown): string {
     return "The data request timed out.";
   if (error instanceof Error) return error.message;
   return "The air-quality data could not be loaded.";
+}
+
+function browserStorage(): Storage | undefined {
+  try {
+    return window.localStorage;
+  } catch {
+    return undefined;
+  }
 }

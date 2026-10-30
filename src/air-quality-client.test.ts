@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createAirQualityClient, parsePm25, parsePsi } from "./air-quality-client";
 
 const loadAirQuality = (options: Parameters<typeof createAirQualityClient>[0]) =>
@@ -137,6 +137,22 @@ describe("air-quality API parsing", () => {
     const refreshed = await client.load();
     expect(refreshed.pm25).toMatchObject({ reading: { values: { central: 99 } } });
     expect(calls).toBe(4);
+  });
+
+  it("loads live readings when the browser denies access to localStorage", async () => {
+    const storage = vi.spyOn(window, "localStorage", "get").mockImplementation(() => {
+      throw new Error("Storage unavailable");
+    });
+    try {
+      const result = await createAirQualityClient({
+        fetcher: makeFetcher({ pm25: pm25Response(), psi: psiResponse() }),
+        now: () => now,
+      }).load();
+      expect(result.pm25).toMatchObject({ kind: "available", source: "live" });
+      expect(result.psi).toMatchObject({ kind: "available", source: "live" });
+    } finally {
+      storage.mockRestore();
+    }
   });
 });
 
