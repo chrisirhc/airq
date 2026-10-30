@@ -54,6 +54,63 @@ describe("air-quality API parsing", () => {
     expect(result.pm25).toMatchObject({ kind: "available", source: "live" });
     expect(result.psi).toMatchObject({ kind: "available", source: "cached" });
   });
+
+  it("retries a failed endpoint without refetching the healthy metric", async () => {
+    const calls: string[] = [];
+    const healthy = makeFetcher({ pm25: pm25Response(), psi: psiResponse() });
+    const fetcher: typeof fetch = async (input, init) => {
+      const url = String(input);
+      calls.push(url);
+      if (url.endsWith("/pm25") && calls.filter((call) => call === url).length === 1) {
+        return new Response(null, { status: 503 });
+      }
+      return healthy(input, init);
+    };
+
+    const result = await loadAirQuality({ fetcher, storage: new MemoryStorage(), now: () => now });
+
+    expect(result.pm25).toMatchObject({ kind: "available", source: "live" });
+    expect(result.psi).toMatchObject({ kind: "available", source: "live" });
+    expect(calls.filter((url) => url.endsWith("/pm25"))).toHaveLength(2);
+    expect(calls.filter((url) => url.endsWith("/psi"))).toHaveLength(1);
+  });
+
+  it("falls back after invalid live data and recalculates cached staleness", async () => {
+    const storage = new MemoryStorage();
+    await loadAirQuality({
+      fetcher: makeFetcher({ pm25: pm25Response(), psi: psiResponse() }),
+      storage,
+      now: () => now,
+    });
+
+    const result = await loadAirQuality({
+      fetcher: makeFetcher({ pm25: { code: 0, data: {} }, psi: psiResponse() }),
+      storage,
+      now: () => new Date("2026-10-05T11:00:00+08:00"),
+    });
+
+    expect(result.pm25).toMatchObject({
+      kind: "available",
+      source: "cached",
+      reading: { stale: true, values: { north: 10, central: 50 } },
+    });
+    expect(result.psi).toMatchObject({ kind: "available", source: "live" });
+  });
+
+  it("removes invalid cached readings without losing the other metric", async () => {
+    const storage = new MemoryStorage();
+    storage.setItem("airq:pm25:v1", JSON.stringify({ code: 0, data: {} }));
+
+    const result = await loadAirQuality({
+      fetcher: makeFetcher({ pm25: new Error("Offline"), psi: psiResponse() }),
+      storage,
+      now: () => now,
+    });
+
+    expect(result.pm25).toEqual({ kind: "unavailable", message: "Offline" });
+    expect(result.psi).toMatchObject({ kind: "available", source: "live" });
+    expect(storage.getItem("airq:pm25:v1")).toBeNull();
+  });
 });
 
 function pm25Response() {
