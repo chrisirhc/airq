@@ -5,9 +5,13 @@ if (!subject || !/^mailto:[^\s@]+@[^\s@]+\.[^\s@]+$/.test(subject)) {
   throw new Error("Usage: node scripts/setup-push-secrets.mjs mailto:you@example.com");
 }
 const names = ["VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT"];
-const existing = spawnSync("npx", ["wrangler", "secret", "list", "--format", "json"], {
-  encoding: "utf8",
-});
+const existing = spawnSync(
+  "npx",
+  ["wrangler", "secret", "list", "--config", ".void-wrangler.jsonc", "--format", "json"],
+  {
+    encoding: "utf8",
+  },
+);
 if (existing.status !== 0)
   throw new Error("Cannot read secret inventory. Run npx wrangler login first.");
 const secrets = JSON.parse(existing.stdout);
@@ -24,7 +28,7 @@ const raw = await crypto.subtle.exportKey("raw", pair.publicKey);
 const privateKey = await crypto.subtle.exportKey("jwk", pair.privateKey);
 if (!privateKey.d) throw new Error("VAPID key export failed");
 const publicKey = Buffer.from(raw).toString("base64url");
-const upload = spawn("npx", ["wrangler", "secret", "bulk"], {
+const upload = spawn("npx", ["wrangler", "secret", "bulk", "--config", ".void-wrangler.jsonc"], {
   stdio: ["pipe", "inherit", "inherit"],
 });
 upload.stdin.end(

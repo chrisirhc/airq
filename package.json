@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "deploy": "npm run build && wrangler deploy",
+    "deploy": "npm run build && void deploy --platform cloudflare",
     "preview": "vite preview",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
@@ -17,12 +17,14 @@
     "test:live": "npm run build && node scripts/check-live.mjs",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "verify": "node scripts/verify.mjs"
+    "verify": "node scripts/verify.mjs",
+    "prepare": "void prepare"
   },
   "dependencies": {
     "@block65/webcrypto-web-push": "^2.0.0",
     "@nkzw/fate": "1.13.0",
-    "zod": "^4.1.11"
+    "zod": "^4.1.11",
+    "void": "1.3.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.4",
@@ -33,8 +35,11 @@
     "jsdom": "^27.0.0",
     "miniflare": "5.20261001.0-alpha",
     "typescript": "^5.9.3",
-    "vite": "^7.1.7",
+    "vite": "^8.0.0",
     "vitest": "^5.0.3",
     "wrangler": "4.147.0"
+  },
+  "engines": {
+    "node": ">=24.21.0"
   }
 }

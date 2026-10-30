@@ -5,13 +5,13 @@ export default defineConfig({
   fullyParallel: true,
   workers: 2,
   use: {
-    baseURL: "http://127.0.0.1:4173",
+    baseURL: "http://127.0.0.1:4187",
     trace: "retain-on-failure",
   },
   webServer: {
-    command: "npm run preview -- --host 127.0.0.1",
-    port: 4173,
-    reuseExistingServer: !process.env.CI,
+    command: "npm run preview -- --host 127.0.0.1 --port 4187 --strictPort",
+    port: 4187,
+    reuseExistingServer: false,
   },
   projects: [
     {
