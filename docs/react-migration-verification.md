@@ -1,5 +1,8 @@
 # React migration verification
 
+This records the original standalone React branch. For the later Fate/Void integration and its checks, see [ADR-008](decisions/008-async-react-with-fate.md).
+
+
 Verified in `/Users/chris/code/airq-react` on 2026-10-12. No original/parallel workspace files were changed, and no push, merge, or deployment was performed.
 
 ## Registry and versions

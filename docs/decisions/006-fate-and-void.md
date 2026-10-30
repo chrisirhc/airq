@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as an experimental refactor.
+Accepted as an experimental refactor. The framework-free client decision is superseded by [ADR-008](008-async-react-with-fate.md); the transport and Void decisions remain in use.
 
 ## Date
 

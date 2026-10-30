@@ -160,9 +160,14 @@ The Worker logs only these diagnostic fields. It does not log coordinates, locat
 
 ## Frontend architecture
 
-The client is a React **19.3.0** application with matching React DOM and TypeScript types, verified as npm's latest stable release on 2026-10-12. Vite 7.3.6, `@vitejs/plugin-react` 5.2.0, and TypeScript 5.9.3 provide automatic JSX and Fast Refresh.
+The client uses React and React DOM 19.3.0, `react-fate` 1.13.0, and Vite 8.
+`src/main.tsx` mounts the app in Strict Mode. `src/app.tsx` provides the Fate client and keeps the header and reading guidance outside the readings' Suspense boundary.
+The initial request shows reading skeletons. A refresh runs through `useRefetch` in an async transition, so existing readings and controls stay available while the request runs.
 
-`src/main.tsx` mounts the app in Strict Mode. `src/app.tsx` composes typed components for controls, readings, disclosures, the SVG map, and badges. A per-app browser controller exposes immutable snapshots through `useSyncExternalStore`; React owns rendering and visit-scoped disclosure choices. The existing data/estimator/badge modules and Cloudflare Worker contracts are retained. See [ADR-007: React frontend](docs/decisions/007-react-frontend.md) for lifecycle and tooling decisions.
+A per-app browser controller exposes immutable snapshots through `useSyncExternalStore` for location callbacks and badge operations.
+It receives committed readings from Fate and does not fetch data or manage loading/retry generations.
+React owns rendering, theme state, map inspection, and visit-scoped disclosure choices.
+See [ADR-008: Async React with Fate](docs/decisions/008-async-react-with-fate.md) and the [original React decision](docs/decisions/007-react-frontend.md).
 
 Useful checks: `npm run typecheck`, `npm run lint`, `npm test` (unit/component tests), `npm run build`, `npm run test:worker`, and `npm run test:browser` (against the production build).
 
@@ -176,8 +181,9 @@ The expandable PM2.5 map samples the same inverse-distance estimator across a co
 
 ## Data client and routes
 
-`src/air-quality-client.ts` creates a framework-free [Fate](https://fate.technology/guide/getting-started) client with typed PM2.5 and PSI value roots.
-The app keeps one client for its lifetime. Concurrent loads share requests, and later refreshes use `network-only` to fetch new readings.
+`src/air-quality-client.ts` creates a [Fate](https://fate.technology/guide/getting-started) client with typed PM2.5 and PSI value roots.
+The app keeps one client for its lifetime. `useRequest` suspends the readings on initial load and observes subsequent cache updates. `useRefetch` fetches fresh readings on retry.
+Concurrent loads share requests, including Strict Mode render replay.
 `src/air-quality-transport.ts` handles the public API, validation, two attempts per endpoint, six-second attempt timeouts, and the existing per-metric offline cache.
 
 [Void](https://void.cloud/guide/server-routing) owns the server routes in `routes/`.

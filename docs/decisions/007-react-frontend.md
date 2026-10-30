@@ -4,6 +4,8 @@
 
 Accepted.
 
+The data-fetching and Vite decisions are superseded by [ADR-008](008-async-react-with-fate.md).
+
 ## Date
 
 2026-10-12
