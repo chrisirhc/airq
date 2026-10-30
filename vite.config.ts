@@ -1,9 +1,10 @@
+import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 import { voidPlugin } from "void";
 
 export default defineConfig({
   base: "./",
-  plugins: process.env.VITEST ? [] : [voidPlugin()],
+  plugins: [react(), ...(process.env.VITEST ? [] : [voidPlugin()])],
   preview: {
     allowedHosts: ["slateserver.lan", "airq.slt.b65.dev"],
   },
@@ -23,6 +24,6 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}"],
   },
 });
