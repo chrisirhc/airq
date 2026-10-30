@@ -46,10 +46,10 @@ export function createAirQualityController(initialReadings: AirQualitySnapshot) 
   let active = false;
   const listeners = new Set<() => void>();
   const badge = createBackgroundBadge(publish);
-  let snapshot = { state, badge: badge.view() };
+  let badgeSnapshot = badge.view();
 
   function publish(): void {
-    snapshot = { state, badge: badge.view() };
+    badgeSnapshot = badge.view();
     if (active) for (const listener of listeners) listener();
   }
 
@@ -326,7 +326,8 @@ export function createAirQualityController(initialReadings: AirQualitySnapshot) 
         listeners.delete(listener);
       };
     },
-    getSnapshot: () => snapshot,
+    getState: () => state,
+    getBadgeSnapshot: () => badgeSnapshot,
     start() {
       active = true;
       badge.connect();
@@ -343,3 +344,5 @@ export function createAirQualityController(initialReadings: AirQualitySnapshot) 
     badge,
   };
 }
+
+export type AirQualityController = ReturnType<typeof createAirQualityController>;

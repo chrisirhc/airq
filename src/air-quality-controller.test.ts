@@ -52,11 +52,11 @@ describe("React browser controller lifecycle", () => {
     expect(fetch).not.toHaveBeenCalled();
     expect(documentListener).not.toHaveBeenCalled();
     expect(windowListener).not.toHaveBeenCalled();
-    expect(controller.getSnapshot()).toBe(controller.getSnapshot());
+    expect(controller.getState()).toBe(controller.getState());
     const notify = vi.fn();
     cleanup.push(controller.subscribe(notify));
     controller.selectRegion("west");
-    expect(controller.getSnapshot().state.display).toEqual({ kind: "manual", region: "west" });
+    expect(controller.getState().display).toEqual({ kind: "manual", region: "west" });
     expect(notify).not.toHaveBeenCalled();
   });
 
@@ -91,13 +91,13 @@ describe("React browser controller lifecycle", () => {
     const stop = controller.start();
     await Promise.resolve();
     stop();
-    const snapshot = controller.getSnapshot();
+    const snapshot = controller.getState();
     const calls = notify.mock.calls.length;
     controller.updateReadings({
       pm25: { kind: "unavailable", message: "Late readings" },
       psi: { kind: "unavailable", message: "Late readings" },
     });
-    expect(controller.getSnapshot()).toBe(snapshot);
+    expect(controller.getState()).toBe(snapshot);
     expect(notify).toHaveBeenCalledTimes(calls);
     expect(removeDocumentListener).toHaveBeenCalledWith("visibilitychange", expect.any(Function));
     expect(removeWindowListener).toHaveBeenCalledWith("focus", expect.any(Function));
@@ -111,7 +111,7 @@ describe("React browser controller lifecycle", () => {
     if (!success) throw new Error("Missing position callback");
     stop();
     success({ coords: { latitude: 1.32, longitude: 103.88 } } as GeolocationPosition);
-    expect(controller.getSnapshot().state.display.kind).toBe("manual");
+    expect(controller.getState().display.kind).toBe("manual");
     expect(lookupLocationName).not.toHaveBeenCalled();
   });
 
@@ -124,11 +124,11 @@ describe("React browser controller lifecycle", () => {
     const success = vi.mocked(navigator.geolocation.getCurrentPosition).mock.calls[0]?.[0];
     if (!success) throw new Error("Missing position callback");
     success({ coords: { latitude: 1.32, longitude: 103.88 } } as GeolocationPosition);
-    expect(controller.getSnapshot().state.display.kind).toBe("estimated");
+    expect(controller.getState().display.kind).toBe("estimated");
     controller.selectRegion("west");
     name.resolve("Late name <img src=x>");
     await name.promise;
     await Promise.resolve();
-    expect(controller.getSnapshot().state.display).toEqual({ kind: "manual", region: "west" });
+    expect(controller.getState().display).toEqual({ kind: "manual", region: "west" });
   });
 });

@@ -1,12 +1,4 @@
-import {
-  Component,
-  type ReactNode,
-  Suspense,
-  useEffect,
-  useState,
-  useSyncExternalStore,
-  useTransition,
-} from "react";
+import { Component, type ReactNode, Suspense, useState, useTransition } from "react";
 import { FateClient, useRefetch, useRequest } from "react-fate";
 import {
   type AirQualityClient,
@@ -14,7 +6,8 @@ import {
   createAirQualityClient,
   readingsRequest,
 } from "./air-quality-client";
-import { type AppState, createAirQualityController } from "./air-quality-controller";
+import { AirQualityProvider, useAirQuality } from "./air-quality-context";
+import type { AppState } from "./air-quality-controller";
 import { BadgeControls } from "./badge-controls";
 import { Disclosure, DisclosureProvider } from "./disclosures";
 import { REGION_LABELS, REGIONS } from "./domain";
@@ -122,19 +115,24 @@ function AirQualityScreen() {
   const readings = useRequest<typeof readingsRequest, typeof airQualityRoots>(readingsRequest);
   const refetch = useRefetch(readingsRequest);
   const [refreshing, startTransition] = useTransition();
-  const [controller] = useState(() => createAirQualityController(readings));
-  const { state, badge } = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
-  useEffect(() => controller.start(), [controller]);
-  useEffect(() => controller.updateReadings(readings), [controller, readings]);
-  const estimated = state.display.kind === "estimated";
-  const requesting = state.location.kind === "requesting";
-  const region =
-    state.display.kind === "manual" ? state.display.region : state.display.estimate.closestRegion;
   function retry() {
     startTransition(async () => {
       await refetch();
     });
   }
+  return (
+    <AirQualityProvider readings={readings}>
+      <AirQualityContent refreshing={refreshing} retry={retry} />
+    </AirQualityProvider>
+  );
+}
+
+function AirQualityContent({ refreshing, retry }: { refreshing: boolean; retry: () => void }) {
+  const { state, requestLocation, selectRegion } = useAirQuality();
+  const estimated = state.display.kind === "estimated";
+  const requesting = state.location.kind === "requesting";
+  const region =
+    state.display.kind === "manual" ? state.display.region : state.display.estimate.closestRegion;
   return (
     <>
       <section className="controls" aria-label="Location and region controls">
@@ -145,7 +143,7 @@ function AirQualityScreen() {
           aria-pressed={estimated}
           aria-busy={requesting}
           disabled={requesting}
-          onClick={controller.requestLocation}
+          onClick={requestLocation}
         >
           <span className="location-icon" aria-hidden="true">
             {estimated && !requesting ? "✓" : "⌖"}
@@ -166,7 +164,7 @@ function AirQualityScreen() {
             value={region}
             onChange={(event) => {
               const selected = REGIONS.find((candidate) => candidate === event.currentTarget.value);
-              if (selected) controller.selectRegion(selected);
+              if (selected) selectRegion(selected);
             }}
           >
             {REGIONS.map((candidate) => (
@@ -197,7 +195,7 @@ function AirQualityScreen() {
           source={state.readings.pm25.source}
         />
       )}
-      <BadgeControls view={badge} badge={controller.badge} />
+      <BadgeControls />
     </>
   );
 }

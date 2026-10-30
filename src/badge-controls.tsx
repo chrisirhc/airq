@@ -1,7 +1,8 @@
-import type { BackgroundBadge, BadgeView } from "./background-badge";
+import { useBadgeControls } from "./air-quality-context";
 import { Disclosure } from "./disclosures";
 
-export function BadgeControls({ view, badge }: { view: BadgeView; badge: BackgroundBadge }) {
+export function BadgeControls() {
+  const { view, badge } = useBadgeControls();
   const {
     debug,
     supported,
