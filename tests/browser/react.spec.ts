@@ -168,3 +168,51 @@ test("keeps committed readings, controls, and map inspection during an async ref
   expect(await mapNode?.evaluate((node) => node.isConnected)).toBe(true);
   await expect(page.getByText("Refreshing readings…")).toHaveCount(0);
 });
+
+test("downloads the map only when opened and keeps readings usable while it loads", async ({
+  page,
+}) => {
+  let requests = 0;
+  let release: () => void = () => {};
+  const ready = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/pm25-map-inspection-*.js", async (route) => {
+    requests++;
+    await ready;
+    await route.continue();
+  });
+  await page.goto("/");
+  await expect(page.getByText("Central region PM2.5")).toBeVisible();
+  expect(requests).toBe(0);
+  await page.locator("#pm25-map > summary").click();
+  await expect(page.getByRole("status").filter({ hasText: "Loading map…" })).toBeVisible();
+  await page.locator("#region-select").selectOption("west");
+  await expect(page.getByText("West region PM2.5")).toBeVisible();
+  release();
+  await expect(
+    page.getByRole("group", { name: "Interactive modelled PM2.5 heatmap" }),
+  ).toBeVisible();
+  expect(requests).toBe(1);
+  await page.locator("#pm25-map > summary").click();
+  await page.locator("#pm25-map > summary").click();
+  await expect(
+    page.getByRole("group", { name: "Interactive modelled PM2.5 heatmap" }),
+  ).toBeVisible();
+  expect(requests).toBe(1);
+});
+
+test("keeps readings and controls available when the optional map chunk fails", async ({
+  page,
+}) => {
+  await page.route("**/pm25-map-inspection-*.js", (route) => route.abort());
+  await page.goto("/");
+  await expect(page.getByText("Central region PM2.5")).toBeVisible();
+  await page.locator("#pm25-map > summary").click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "The map could not be loaded. Reload the page to try again.",
+  );
+  await page.locator("#region-select").selectOption("east");
+  await expect(page.getByText("East region PM2.5")).toBeVisible();
+  await expect(page.getByText("East region PSI")).toBeVisible();
+});

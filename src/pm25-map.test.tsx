@@ -1,6 +1,6 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DisclosureProvider } from "./disclosures";
 import { Pm25Map } from "./pm25-map-view";
 
@@ -96,7 +96,10 @@ describe("PM2.5 model map", () => {
         disclosure.open = true;
         disclosure.dispatchEvent(new Event("toggle"));
       });
-      expect(container.querySelector("svg")).not.toBeNull();
+      await vi.waitFor(async () => {
+        await act(async () => {});
+        expect(container.querySelector("svg")).not.toBeNull();
+      });
       expect(container.querySelector(".heatmap-point")?.textContent).toContain(
         "Your location estimate: 20.00 µg/m³",
       );
